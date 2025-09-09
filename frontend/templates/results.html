@@ -218,16 +218,175 @@
                 </div>
             </div>
             
+            <!-- Replace the existing charts-tab content with this enhanced version -->
             <div id="charts-tab" class="tab-content">
                 <div class="section">
                     <h2 class="section-title">Impact Visualization</h2>
                     
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px;">
                         <div class="chart-container">
                             <canvas id="impactChart"></canvas>
                         </div>
                         <div class="chart-container">
                             <canvas id="statusChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- WE Statistics Section -->
+                    <div class="stats-section">
+                        <h3 class="subsection-title">WE Impact Statistics</h3>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                            <div class="stat-card">
+                                <div class="stat-value">{{ we_stats.isolated_msans if we_stats else 0 }}</div>
+                                <div class="stat-label">Isolated MSANs</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">{{ we_stats.partial_msans if we_stats else 0 }}</div>
+                                <div class="stat-label">Partially Impacted MSANs</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">{{ we_stats.isolated_sub if we_stats else 0 }}</div>
+                                <div class="stat-label">Isolated Subscribers</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">{{ we_stats.partial_sub if we_stats else 0 }}</div>
+                                <div class="stat-label">Partially Impacted Subscribers</div>
+                            </div>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div class="chart-container">
+                                <canvas id="weMsansChart"></canvas>
+                            </div>
+                            <div class="chart-container">
+                                <canvas id="weSubscribersChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Others Statistics Section -->
+                    <div class="stats-section">
+                        <h3 class="subsection-title">Others Impact Statistics</h3>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                            <div class="stat-card">
+                                <div class="stat-value">{{ others_stats.isolated_msans if others_stats else 0 }}</div>
+                                <div class="stat-label">Isolated MSANs</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">{{ others_stats.partial_msans if others_stats else 0 }}</div>
+                                <div class="stat-label">Partially Impacted MSANs</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">{{ others_stats.isolated_sub if others_stats else 0 }}</div>
+                                <div class="stat-label">Isolated Subscribers</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">{{ others_stats.partial_sub if others_stats else 0 }}</div>
+                                <div class="stat-label">Partially Impacted Subscribers</div>
+                            </div>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px;">
+                            <div class="chart-container">
+                                <canvas id="othersMsansChart"></canvas>
+                            </div>
+                            <div class="chart-container">
+                                <canvas id="othersSubscribersChart"></canvas>
+                            </div>
+                        </div>
+                        
+                        <!-- ISP Breakdown for Others -->
+                        <h4 class="subsubsection-title">Isolated Subscribers by ISP</h4>
+                        <div class="stats-grid" style="grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));">
+                            <div class="stat-card">
+                                <div class="stat-value">{{ others_stats.isolated_voda if others_stats else 0 }}</div>
+                                <div class="stat-label">Vodafone Total</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">{{ others_stats.isolated_voda_ubb if others_stats else 0 }}</div>
+                                <div class="stat-label">Vodafone UBB</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">{{ others_stats.isolated_voda_hs if others_stats else 0 }}</div>
+                                <div class="stat-label">Vodafone HS</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">{{ others_stats.isolated_voda_ubb_ftth if others_stats else 0 }}</div>
+                                <div class="stat-label">Vodafone UBB FTTH</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">{{ others_stats.isolated_voda_hs_ftth if others_stats else 0 }}</div>
+                                <div class="stat-label">Vodafone HS FTTH</div>
+                            </div>
+                            
+                            <div class="stat-card">
+                                <div class="stat-value">{{ others_stats.isolated_orange if others_stats else 0 }}</div>
+                                <div class="stat-label">Orange Total</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">{{ others_stats.isolated_orange_ubb if others_stats else 0 }}</div>
+                                <div class="stat-label">Orange UBB</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">{{ others_stats.isolated_orange_hs if others_stats else 0 }}</div>
+                                <div class="stat-label">Orange HS</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">{{ others_stats.isolated_orange_ubb_ftth if others_stats else 0 }}</div>
+                                <div class="stat-label">Orange UBB FTTH</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">{{ others_stats.isolated_orange_hs_ftth if others_stats else 0 }}</div>
+                                <div class="stat-label">Orange HS FTTH</div>
+                            </div>
+                            
+                            <div class="stat-card">
+                                <div class="stat-value">{{ others_stats.isolated_etisalat if others_stats else 0 }}</div>
+                                <div class="stat-label">Etisalat Total</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">{{ others_stats.isolated_etisalat_ubb if others_stats else 0 }}</div>
+                                <div class="stat-label">Etisalat UBB</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">{{ others_stats.isolated_etisalat_hs if others_stats else 0 }}</div>
+                                <div class="stat-label">Etisalat HS</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">{{ others_stats.isolated_etisalat_ubb_ftth if others_stats else 0 }}</div>
+                                <div class="stat-label">Etisalat UBB FTTH</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">{{ others_stats.isolated_etisalat_hs_ftth if others_stats else 0 }}</div>
+                                <div class="stat-label">Etisalat HS FTTH</div>
+                            </div>
+                            
+                            <div class="stat-card">
+                                <div class="stat-value">{{ others_stats.isolated_noor if others_stats else 0 }}</div>
+                                <div class="stat-label">Noor Total</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">{{ others_stats.isolated_noor_ubb if others_stats else 0 }}</div>
+                                <div class="stat-label">Noor UBB</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">{{ others_stats.isolated_noor_hs if others_stats else 0 }}</div>
+                                <div class="stat-label">Noor HS</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">{{ others_stats.isolated_noor_ubb_ftth if others_stats else 0 }}</div>
+                                <div class="stat-label">Noor UBB FTTH</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">{{ others_stats.isolated_noor_hs_ftth if others_stats else 0 }}</div>
+                                <div class="stat-label">Noor HS FTTH</div>
+                            </div>
+                        </div>
+                        
+                        <div class="chart-container">
+                            <canvas id="ispBreakdownChart"></canvas>
                         </div>
                     </div>
                 </div>
@@ -266,8 +425,8 @@
     <script src="/static/js/script.js"></script>
     <script src="/static/js/dashboard.js"></script>
     <script>
-        // Initialize charts with data from the API response
         document.addEventListener('DOMContentLoaded', function() {
+            // Initialize charts with data from the API response
             // Impact distribution chart
             const impactCtx = document.getElementById('impactChart').getContext('2d');
             
@@ -294,6 +453,174 @@
                 }
             });
             
+            // WE MSANs Chart
+            const weMsansCtx = document.getElementById('weMsansChart').getContext('2d');
+            new Chart(weMsansCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Isolated', 'Partially Impacted'],
+                    datasets: [{
+                        label: 'WE MSANs',
+                        data: [
+                            {{ we_stats.isolated_msans if we_stats else 0 }},
+                            {{ we_stats.partial_msans if we_stats else 0 }}
+                        ],
+                        backgroundColor: ['#ff6b6b', '#ffe066']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: { display: true, text: 'WE MSANs by Impact Type' }
+                    }
+                }
+            });
+            
+            // WE Subscribers Chart
+            const weSubscribersCtx = document.getElementById('weSubscribersChart').getContext('2d');
+            new Chart(weSubscribersCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Isolated', 'Partially Impacted'],
+                    datasets: [{
+                        label: 'WE Subscribers',
+                        data: [
+                            {{ we_stats.isolated_sub if we_stats else 0 }},
+                            {{ we_stats.partial_sub if we_stats else 0 }}
+                        ],
+                        backgroundColor: ['#ff6b6b', '#ffe066']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: { display: true, text: 'WE Subscribers by Impact Type' }
+                    }
+                }
+            });
+            
+            // Others MSANs Chart
+            const othersMsansCtx = document.getElementById('othersMsansChart').getContext('2d');
+            new Chart(othersMsansCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Isolated', 'Partially Impacted'],
+                    datasets: [{
+                        label: 'Others MSANs',
+                        data: [
+                            {{ others_stats.isolated_msans if others_stats else 0 }},
+                            {{ others_stats.partial_msans if others_stats else 0 }}
+                        ],
+                        backgroundColor: ['#ff6b6b', '#ffe066']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: { display: true, text: 'Others MSANs by Impact Type' }
+                    }
+                }
+            });
+            
+            // Others Subscribers Chart
+            const othersSubscribersCtx = document.getElementById('othersSubscribersChart').getContext('2d');
+            new Chart(othersSubscribersCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Isolated', 'Partially Impacted'],
+                    datasets: [{
+                        label: 'Others Subscribers',
+                        data: [
+                            {{ others_stats.isolated_sub if others_stats else 0 }},
+                            {{ others_stats.partial_sub if others_stats else 0 }}
+                        ],
+                        backgroundColor: ['#ff6b6b', '#ffe066']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: { display: true, text: 'Others Subscribers by Impact Type' }
+                    }
+                }
+            });
+            
+            // ISP Breakdown Chart
+            const ispBreakdownCtx = document.getElementById('ispBreakdownChart').getContext('2d');
+            new Chart(ispBreakdownCtx, {
+                type: 'pie',
+                data: {
+                    labels: ['Vodafone', 'Orange', 'Etisalat', 'Noor'],
+                    datasets: [
+                        {
+                            label: 'Total',
+                            data: [
+                                {{ others_stats.isolated_voda if others_stats else 0 }},
+                                {{ others_stats.isolated_orange if others_stats else 0 }},
+                                {{ others_stats.isolated_etisalat if others_stats else 0 }},
+                                {{ others_stats.isolated_noor if others_stats else 0 }}
+                            ],
+                            backgroundColor: '#4CAF50'
+                        },
+                        {
+                            label: 'UBB',
+                            data: [
+                                {{ others_stats.isolated_voda_ubb if others_stats else 0 }},
+                                {{ others_stats.isolated_orange_ubb if others_stats else 0 }},
+                                {{ others_stats.isolated_etisalat_ubb if others_stats else 0 }},
+                                {{ others_stats.isolated_noor_ubb if others_stats else 0 }}
+                            ],
+                            backgroundColor: '#2196F3'
+                        },
+                        {
+                            label: 'HS',
+                            data: [
+                                {{ others_stats.isolated_voda_hs if others_stats else 0 }},
+                                {{ others_stats.isolated_orange_hs if others_stats else 0 }},
+                                {{ others_stats.isolated_etisalat_hs if others_stats else 0 }},
+                                {{ others_stats.isolated_noor_hs if others_stats else 0 }}
+                            ],
+                            backgroundColor: '#FF9800'
+                        },
+                        {
+                            label: 'UBB FTTH',
+                            data: [
+                                {{ others_stats.isolated_voda_ubb_ftth if others_stats else 0 }},
+                                {{ others_stats.isolated_orange_ubb_ftth if others_stats else 0 }},
+                                {{ others_stats.isolated_etisalat_ubb_ftth if others_stats else 0 }},
+                                {{ others_stats.isolated_noor_ubb_ftth if others_stats else 0 }}
+                            ],
+                            backgroundColor: '#9C27B0'
+                        },
+                        {
+                            label: 'HS FTTH',
+                            data: [
+                                {{ others_stats.isolated_voda_hs_ftth if others_stats else 0 }},
+                                {{ others_stats.isolated_orange_hs_ftth if others_stats else 0 }},
+                                {{ others_stats.isolated_etisalat_hs_ftth if others_stats else 0 }},
+                                {{ others_stats.isolated_noor_hs_ftth if others_stats else 0 }}
+                            ],
+                            backgroundColor: '#F44336'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: { display: true, text: 'Isolated Subscribers by ISP and Service Type' }
+                    },
+                    scales: {
+                        x: {
+                            stacked: true
+                        },
+                        y: {
+                            stacked: true
+                        }
+                    }
+                }
+            });
+            
+
             // Initialize pagination for each table
             setupPagination('we-table', 50);
             setupPagination('others-table', 50);

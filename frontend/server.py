@@ -65,7 +65,58 @@ async def analyze_network_impact(
         we_data = await get_detailed_data(identifier, identifier_type, "we")
         others_data = await get_detailed_data(identifier, identifier_type, "others")
         
-        # Prepare data for the template
+        # In the analyze_network_impact function, after getting we_data and others_data
+        # Add code to calculate the statistics
+
+        # Calculate WE statistics
+        we_stats = {}
+        if we_data is not None and not we_data.empty:
+            we_unique = we_data.drop_duplicates(subset=['MSANCODE'])
+            isolated_we = we_unique[we_unique['Impact'] == 'Isolated']
+            partial_we = we_unique[we_unique['Impact'] == 'Partially Impacted']
+            
+            we_stats = {
+                'isolated_msans': len(isolated_we),
+                'partial_msans': len(partial_we),
+                'isolated_sub': isolated_we['CUST'].sum() if not isolated_we.empty else 0,
+                'partial_sub': partial_we['CUST'].sum() if not partial_we.empty else 0
+            }
+
+        # Calculate Others statistics
+        others_stats = {}
+        if others_data is not None and not others_data.empty:
+            others_unique = others_data.drop_duplicates(subset=['MSANCODE'])
+            isolated_others = others_unique[others_unique['Impact'] == 'Isolated']
+            partial_others = others_unique[others_unique['Impact'] == 'Partially Impacted']
+            
+            others_stats = {
+                'isolated_msans': len(isolated_others),
+                'partial_msans': len(partial_others),
+                'isolated_sub': isolated_others['TOTAL_OTHER_CUST'].sum() if not isolated_others.empty else 0,
+                'partial_sub': partial_others['TOTAL_OTHER_CUST'].sum() if not partial_others.empty else 0,
+                'isolated_voda': isolated_others['VODA_CUST'].sum() if not isolated_others.empty else 0,
+                'isolated_voda_ubb': isolated_others['VODA_UBBT_CUST'].sum() if not isolated_others.empty else 0,
+                'isolated_voda_hs': isolated_others['VODA_HS_CUST'].sum() if not isolated_others.empty else 0,
+                'isolated_voda_ubb_ftth': isolated_others['VODA_UBBT_FTTH_CUST'].sum() if not isolated_others.empty else 0,
+                'isolated_voda_hs_ftth': isolated_others['VODA_HS_FTTH_CUST'].sum() if not isolated_others.empty else 0,
+                'isolated_orange': isolated_others['ORANGE_CUST'].sum() if not isolated_others.empty else 0,
+                'isolated_orange_ubb': isolated_others['ORANGE_UBBT_CUST'].sum() if not isolated_others.empty else 0,
+                'isolated_orange_hs': isolated_others['ORANGE_HS_CUST'].sum() if not isolated_others.empty else 0,
+                'isolated_orange_ubb_ftth': isolated_others['ORANGE_UBBT_FTTH_CUST'].sum() if not isolated_others.empty else 0,
+                'isolated_orange_hs_ftth': isolated_others['ORANGE_HS_FTTH_CUST'].sum() if not isolated_others.empty else 0,
+                'isolated_etisalat': isolated_others['ETISLAT_CUST'].sum() if not isolated_others.empty else 0,
+                'isolated_etisalat_ubb': isolated_others['ETISLAT_UBBT_CUST'].sum() if not isolated_others.empty else 0,
+                'isolated_etisalat_hs': isolated_others['ETISLAT_HS_CUST'].sum() if not isolated_others.empty else 0,
+                'isolated_etisalat_ubb_ftth': isolated_others['ETISLAT_UBBT_FTTH_CUST'].sum() if not isolated_others.empty else 0,
+                'isolated_etisalat_hs_ftth': isolated_others['ETISLAT_HS_FTTH_CUST'].sum() if not isolated_others.empty else 0,
+                'isolated_noor': isolated_others['NOOR_CUST'].sum() if not isolated_others.empty else 0,
+                'isolated_noor_ubb': isolated_others['NOOR_UBBT_CUST'].sum() if not isolated_others.empty else 0,
+                'isolated_noor_hs': isolated_others['NOOR_HS_CUST'].sum() if not isolated_others.empty else 0,
+                'isolated_noor_ubb_ftth': isolated_others['NOOR_UBBT_FTTH_CUST'].sum() if not isolated_others.empty else 0,
+                'isolated_noor_hs_ftth': isolated_others['NOOR_HS_FTTH_CUST'].sum() if not isolated_others.empty else 0
+            }
+
+        # Add these to template_data
         template_data = {
             "request": request,
             "identifier": identifier,
@@ -73,6 +124,8 @@ async def analyze_network_impact(
             "result": result,
             "we_data": we_data,
             "others_data": others_data,
+            "we_stats": we_stats,
+            "others_stats": others_stats,
             "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
         
