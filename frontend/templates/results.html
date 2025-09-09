@@ -7,6 +7,132 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="/static/css/style.css">
     <link rel="stylesheet" href="/static/css/dashboard.css">
+    <style>
+        .isp-breakdown-section {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #f9f9f9;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+        }
+        
+        .isp-tabs {
+            display: flex;
+            border-bottom: 1px solid #ddd;
+            margin-bottom: 20px;
+        }
+        
+        .isp-tab-button {
+            padding: 10px 20px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            color: #666;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s ease;
+        }
+        
+        .isp-tab-button.active {
+            color: #2196F3;
+            border-bottom-color: #2196F3;
+        }
+        
+        .isp-tab-content {
+            display: none;
+        }
+        
+        .isp-tab-content.active {
+            display: block;
+        }
+        
+        .isp-summary-card {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .isp-total {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .total-label {
+            font-size: 16px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        
+        .total-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #2196F3;
+        }
+        
+        .service-breakdown {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        .service-category {
+            background-color: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .service-category h5 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            color: #444;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 8px;
+        }
+        
+        .service-stats {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .service-stat {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+        }
+        
+        .service-label {
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .service-value {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        @media (max-width: 768px) {
+            .service-breakdown {
+                grid-template-columns: 1fr;
+            }
+            
+            .isp-tabs {
+                flex-wrap: wrap;
+            }
+            
+            .isp-tab-button {
+                padding: 8px 12px;
+                font-size: 14px;
+            }
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -298,92 +424,172 @@
                         </div>
                         
                         <!-- ISP Breakdown for Others -->
+                        <div class="isp-breakdown-section">
                         <h4 class="subsubsection-title">Isolated Subscribers by ISP</h4>
-                        <div class="stats-grid" style="grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));">
-                            <div class="stat-card">
-                                <div class="stat-value">{{ others_stats.isolated_voda if others_stats else 0 }}</div>
-                                <div class="stat-label">Vodafone Total</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-value">{{ others_stats.isolated_voda_ubb if others_stats else 0 }}</div>
-                                <div class="stat-label">Vodafone UBB</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-value">{{ others_stats.isolated_voda_hs if others_stats else 0 }}</div>
-                                <div class="stat-label">Vodafone HS</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-value">{{ others_stats.isolated_voda_ubb_ftth if others_stats else 0 }}</div>
-                                <div class="stat-label">Vodafone UBB FTTH</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-value">{{ others_stats.isolated_voda_hs_ftth if others_stats else 0 }}</div>
-                                <div class="stat-label">Vodafone HS FTTH</div>
+                        
+                        <div class="isp-tabs">
+                            <button class="isp-tab-button active" data-isp="voda">Vodafone</button>
+                            <button class="isp-tab-button" data-isp="orange">Orange</button>
+                            <button class="isp-tab-button" data-isp="etisalat">Etisalat</button>
+                            <button class="isp-tab-button" data-isp="noor">Noor</button>
+                        </div>
+                        
+                        <div class="isp-tab-content active" id="voda-tab">
+                            <div class="isp-summary-card">
+                                <div class="isp-total">
+                                    <span class="total-label">Vodafone Total</span>
+                                    <span class="total-value">{{ others_stats.isolated_voda if others_stats else 0 }}</span>
+                                </div>
                             </div>
                             
-                            <div class="stat-card">
-                                <div class="stat-value">{{ others_stats.isolated_orange if others_stats else 0 }}</div>
-                                <div class="stat-label">Orange Total</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-value">{{ others_stats.isolated_orange_ubb if others_stats else 0 }}</div>
-                                <div class="stat-label">Orange UBB</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-value">{{ others_stats.isolated_orange_hs if others_stats else 0 }}</div>
-                                <div class="stat-label">Orange HS</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-value">{{ others_stats.isolated_orange_ubb_ftth if others_stats else 0 }}</div>
-                                <div class="stat-label">Orange UBB FTTH</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-value">{{ others_stats.isolated_orange_hs_ftth if others_stats else 0 }}</div>
-                                <div class="stat-label">Orange HS FTTH</div>
-                            </div>
-                            
-                            <div class="stat-card">
-                                <div class="stat-value">{{ others_stats.isolated_etisalat if others_stats else 0 }}</div>
-                                <div class="stat-label">Etisalat Total</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-value">{{ others_stats.isolated_etisalat_ubb if others_stats else 0 }}</div>
-                                <div class="stat-label">Etisalat UBB</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-value">{{ others_stats.isolated_etisalat_hs if others_stats else 0 }}</div>
-                                <div class="stat-label">Etisalat HS</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-value">{{ others_stats.isolated_etisalat_ubb_ftth if others_stats else 0 }}</div>
-                                <div class="stat-label">Etisalat UBB FTTH</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-value">{{ others_stats.isolated_etisalat_hs_ftth if others_stats else 0 }}</div>
-                                <div class="stat-label">Etisalat HS FTTH</div>
-                            </div>
-                            
-                            <div class="stat-card">
-                                <div class="stat-value">{{ others_stats.isolated_noor if others_stats else 0 }}</div>
-                                <div class="stat-label">Noor Total</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-value">{{ others_stats.isolated_noor_ubb if others_stats else 0 }}</div>
-                                <div class="stat-label">Noor UBB</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-value">{{ others_stats.isolated_noor_hs if others_stats else 0 }}</div>
-                                <div class="stat-label">Noor HS</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-value">{{ others_stats.isolated_noor_ubb_ftth if others_stats else 0 }}</div>
-                                <div class="stat-label">Noor UBB FTTH</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-value">{{ others_stats.isolated_noor_hs_ftth if others_stats else 0 }}</div>
-                                <div class="stat-label">Noor HS FTTH</div>
+                            <div class="service-breakdown">
+                                <div class="service-category">
+                                    <h5>UBB Services</h5>
+                                    <div class="service-stats">
+                                        <div class="service-stat">
+                                            <span class="service-label">UBB Total</span>
+                                            <span class="service-value">{{ others_stats.isolated_voda_ubb if others_stats else 0 }}</span>
+                                        </div>
+                                        <div class="service-stat">
+                                            <span class="service-label">UBB FTTH</span>
+                                            <span class="service-value">{{ others_stats.isolated_voda_ubb_ftth if others_stats else 0 }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="service-category">
+                                    <h5>HS Services</h5>
+                                    <div class="service-stats">
+                                        <div class="service-stat">
+                                            <span class="service-label">HS Total</span>
+                                            <span class="service-value">{{ others_stats.isolated_voda_hs if others_stats else 0 }}</span>
+                                        </div>
+                                        <div class="service-stat">
+                                            <span class="service-label">HS FTTH</span>
+                                            <span class="service-value">{{ others_stats.isolated_voda_hs_ftth if others_stats else 0 }}</span>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
+                        
+                        <div class="isp-tab-content" id="orange-tab">
+                            <div class="isp-summary-card">
+                                <div class="isp-total">
+                                    <span class="total-label">Orange Total</span>
+                                    <span class="total-value">{{ others_stats.isolated_orange if others_stats else 0 }}</span>
+                                </div>
+                            </div>
+                            
+                            <div class="service-breakdown">
+                                <div class="service-category">
+                                    <h5>UBB Services</h5>
+                                    <div class="service-stats">
+                                        <div class="service-stat">
+                                            <span class="service-label">UBB Total</span>
+                                            <span class="service-value">{{ others_stats.isolated_orange_ubb if others_stats else 0 }}</span>
+                                        </div>
+                                        <div class="service-stat">
+                                            <span class="service-label">UBB FTTH</span>
+                                            <span class="service-value">{{ others_stats.isolated_orange_ubb_ftth if others_stats else 0 }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="service-category">
+                                    <h5>HS Services</h5>
+                                    <div class="service-stats">
+                                        <div class="service-stat">
+                                            <span class="service-label">HS Total</span>
+                                            <span class="service-value">{{ others_stats.isolated_orange_hs if others_stats else 0 }}</span>
+                                        </div>
+                                        <div class="service-stat">
+                                            <span class="service-label">HS FTTH</span>
+                                            <span class="service-value">{{ others_stats.isolated_orange_hs_ftth if others_stats else 0 }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="isp-tab-content" id="etisalat-tab">
+                            <div class="isp-summary-card">
+                                <div class="isp-total">
+                                    <span class="total-label">Etisalat Total</span>
+                                    <span class="total-value">{{ others_stats.isolated_etisalat if others_stats else 0 }}</span>
+                                </div>
+                            </div>
+                            
+                            <div class="service-breakdown">
+                                <div class="service-category">
+                                    <h5>UBB Services</h5>
+                                    <div class="service-stats">
+                                        <div class="service-stat">
+                                            <span class="service-label">UBB Total</span>
+                                            <span class="service-value">{{ others_stats.isolated_etisalat_ubb if others_stats else 0 }}</span>
+                                        </div>
+                                        <div class="service-stat">
+                                            <span class="service-label">UBB FTTH</span>
+                                            <span class="service-value">{{ others_stats.isolated_etisalat_ubb_ftth if others_stats else 0 }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="service-category">
+                                    <h5>HS Services</h5>
+                                    <div class="service-stats">
+                                        <div class="service-stat">
+                                            <span class="service-label">HS Total</span>
+                                            <span class="service-value">{{ others_stats.isolated_etisalat_hs if others_stats else 0 }}</span>
+                                        </div>
+                                        <div class="service-stat">
+                                            <span class="service-label">HS FTTH</span>
+                                            <span class="service-value">{{ others_stats.isolated_etisalat_hs_ftth if others_stats else 0 }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="isp-tab-content" id="noor-tab">
+                            <div class="isp-summary-card">
+                                <div class="isp-total">
+                                    <span class="total-label">Noor Total</span>
+                                    <span class="total-value">{{ others_stats.isolated_noor if others_stats else 0 }}</span>
+                                </div>
+                            </div>
+                            
+                            <div class="service-breakdown">
+                                <div class="service-category">
+                                    <h5>UBB Services</h5>
+                                    <div class="service-stats">
+                                        <div class="service-stat">
+                                            <span class="service-label">UBB Total</span>
+                                            <span class="service-value">{{ others_stats.isolated_noor_ubb if others_stats else 0 }}</span>
+                                        </div>
+                                        <div class="service-stat">
+                                            <span class="service-label">UBB FTTH</span>
+                                            <span class="service-value">{{ others_stats.isolated_noor_ubb_ftth if others_stats else 0 }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="service-category">
+                                    <h5>HS Services</h5>
+                                    <div class="service-stats">
+                                        <div class="service-stat">
+                                            <span class="service-label">HS Total</span>
+                                            <span class="service-value">{{ others_stats.isolated_noor_hs if others_stats else 0 }}</span>
+                                        </div>
+                                        <div class="service-stat">
+                                            <span class="service-label">HS FTTH</span>
+                                            <span class="service-value">{{ others_stats.isolated_noor_hs_ftth if others_stats else 0 }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                         
                         <div class="chart-container">
                             <canvas id="ispBreakdownChart"></canvas>
@@ -548,7 +754,7 @@
             // ISP Breakdown Chart
             const ispBreakdownCtx = document.getElementById('ispBreakdownChart').getContext('2d');
             new Chart(ispBreakdownCtx, {
-                type: 'pie',
+                type: 'bar',
                 data: {
                     labels: ['Vodafone', 'Orange', 'Etisalat', 'Noor'],
                     datasets: [
@@ -624,6 +830,26 @@
             // Initialize pagination for each table
             setupPagination('we-table', 50);
             setupPagination('others-table', 50);
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // ISP tab functionality
+            const ispTabButtons = document.querySelectorAll('.isp-tab-button');
+            const ispTabContents = document.querySelectorAll('.isp-tab-content');
+            
+            ispTabButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const isp = this.getAttribute('data-isp');
+                    
+                    // Remove active class from all buttons and contents
+                    ispTabButtons.forEach(btn => btn.classList.remove('active'));
+                    ispTabContents.forEach(content => content.classList.remove('active'));
+                    
+                    // Add active class to clicked button and corresponding content
+                    this.classList.add('active');
+                    document.getElementById(`${isp}-tab`).classList.add('active');
+                });
+            });
         });
 
         // Convert Jinja template variables to JavaScript variables with proper fallbacks
