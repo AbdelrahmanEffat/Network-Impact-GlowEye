@@ -247,8 +247,8 @@
                                     <th>Customer Count</th>
                                     <th>Impact</th>
                                     <th>cir_type</th>
-                                    <th>Path</th>
-                                    <th>Path2</th>
+                                    <th>Physical Path</th>
+                                    <th>Backup Physical Path</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -314,7 +314,8 @@
                                     <th>Service</th>
                                     <th>ISP</th>
                                     <th>Impact</th>
-                                    <th>Path</th>
+                                    <th>Physical Path</th>
+                                    <th>Backup Physical Path</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -327,6 +328,7 @@
                                     <td>{{ record.ISP }}</td>
                                     <td>{{ record.Impact }}</td>
                                     <td>{{ record.Path }}</td>
+                                    <td>{{ record.Path2 }}</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>

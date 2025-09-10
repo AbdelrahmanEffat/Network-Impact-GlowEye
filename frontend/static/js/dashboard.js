@@ -391,7 +391,14 @@ class NetworkDashboard {
         recordDiv.className = 'path-record';
         
         const recordHeader = document.createElement('h4');
-        recordHeader.textContent = `Record ${index + 1}`;
+        //recordHeader.textContent = `Record ${index + 1}`;
+        // Define custom names for the first two records
+        const recordNames = ['Main logical Path', 'Backup Logical Path'];
+        recordHeader.textContent = recordNames[index] || `Record ${index + 1}`;
+
+        // debug log message
+        console.log('Setting header text to:', recordHeader.textContent);
+        
         recordDiv.appendChild(recordHeader);
         
         // Impact information
@@ -406,12 +413,12 @@ class NetworkDashboard {
         
         // Primary path
         if (record.Path) {
-            this.addPathSection(recordDiv, 'Primary Path', record.Path);
+            this.addPathSection(recordDiv, 'Primary Physical Path', record.Path);
         }
         
         // Backup path
         if (record.Path2) {
-            this.addPathSection(recordDiv, 'Backup Path', record.Path2);
+            this.addPathSection(recordDiv, 'Backup Physical Path', record.Path2);
         }
         
         return recordDiv;
