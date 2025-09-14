@@ -260,12 +260,28 @@ async def analyze_network_impact_detailed(request: AnalysisRequest):
             others_results = others_analyzer.analyze_node_impact(request.identifier)
 
         # Convert NaN values to None (which becomes null in JSON)
-        we_results_clean = we_results.where(pd.notnull(we_results), None)
-        others_results_clean = others_results.where(pd.notnull(others_results), None)
+        # Use a more robust method to handle all NaN cases
+        def replace_nan_with_none(obj):
+            if isinstance(obj, dict):
+                return {k: replace_nan_with_none(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [replace_nan_with_none(v) for v in obj]
+            elif pd.isna(obj):  # This handles both NaN and NaT values
+                return None
+            else:
+                return obj
+        
+        # Convert to dict first, then clean NaN values
+        we_results_dict = we_results.to_dict(orient='records')
+        others_results_dict = others_results.to_dict(orient='records')
+        
+        # Clean NaN values from both results
+        we_results_clean = replace_nan_with_none(we_results_dict)
+        others_results_clean = replace_nan_with_none(others_results_dict)
         
         return {
-            "we_results": we_results_clean.to_dict(orient='records'),
-            "others_results": others_results_clean.to_dict(orient='records')
+            "we_results": we_results_clean,
+            "others_results": others_results_clean
         }
     except Exception as e:
         logger.error(f"Detailed analysis failed: {str(e)}")
