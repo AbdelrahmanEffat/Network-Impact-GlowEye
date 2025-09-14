@@ -1,59 +1,78 @@
-// Improved Dashboard functionality for network path analysis
+// Replace your entire NetworkDashboard class with this fixed version
+
 class NetworkDashboard {
     constructor() {
+        console.log('NetworkDashboard constructor called');
         this.weData = null;
         this.currentSimulation = null;
         this.observers = [];
         this.eventListeners = [];
+        this.failedNodeId = null;
+        this.isInitialized = false;
     }
 
-    initialize(data) {
-        this.weData = data;
+    initialize(data, failedNodeId = null) {
+        console.log('NetworkDashboard.initialize called with failedNodeId:', failedNodeId);
         
-        // Check dependencies
+        this.weData = data;
+        this.failedNodeId = failedNodeId;
+        
         if (typeof d3 === 'undefined') {
             console.error('D3.js library is required but not loaded');
             return false;
         }
 
-        document.addEventListener('DOMContentLoaded', () => {
-            this.initializeDashboard();
-        });
+        // Instead of using MutationObserver, directly attach to tab buttons
+        // Set up tab handling
+        this.setupTabHandling();
+        
+        // If dashboard tab is already active, render immediately
+        if (document.getElementById('dashboard-tab')?.classList.contains('active')) {
+            setTimeout(() => this.renderDashboard(), 100);
+        }
         
         return true;
     }
 
-    initializeDashboard() {
-        const dashboardTab = document.getElementById('dashboard-tab');
-        if (!dashboardTab) return;
-
-        const observer = new MutationObserver((mutations) => {
-            mutations.forEach((mutation) => {
-                if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
-                    if (dashboardTab.classList.contains('active')) {
-                        this.renderDashboard();
-                    } else {
-                        this.cleanup();
-                    }
+    setupTabHandling() {
+        console.log('Setting up tab handling...');
+        
+        // Find all tab buttons and add click handlers
+        const tabButtons = document.querySelectorAll('.tab-button');
+        tabButtons.forEach(button => {
+            const clickHandler = () => {
+                const tabId = button.getAttribute('data-tab');
+                if (tabId === 'dashboard-tab') {
+                    console.log('Dashboard tab clicked, rendering...');
+                    setTimeout(() => this.renderDashboard(), 100);
                 }
+            };
+            
+            button.addEventListener('click', clickHandler);
+            this.eventListeners.push({ 
+                element: button, 
+                event: 'click', 
+                handler: clickHandler 
             });
         });
-
-        observer.observe(dashboardTab, { attributes: true });
-        this.observers.push(observer);
+        
+        console.log('Tab handling setup complete');
     }
 
     renderDashboard() {
-        console.log("Rendering dashboard...");
+        console.log('=== RENDER DASHBOARD CALLED ===');
+        console.log('Dashboard state:', {
+            weDataLength: this.weData ? this.weData.length : 'null',
+            failedNodeId: this.failedNodeId,
+            isInitialized: this.isInitialized
+        });
 
         try {
-            // Validate data
             if (!this.validateData()) {
                 this.showErrorMessage("No valid WE data available for dashboard visualization.");
                 return;
             }
             
-            // Clear previous content and cleanup
             this.cleanup();
             
             const dashboardContainer = document.getElementById('dashboard-container');
@@ -64,11 +83,10 @@ class NetworkDashboard {
             
             dashboardContainer.innerHTML = '';
             
-            // Create dashboard components
             this.createDashboardControls();
             
-            // Initialize with first MSANCODE
             const firstMsan = this.weData[0].MSANCODE;
+            console.log('Updating visualization with first MSAN:', firstMsan);
             this.updateVisualization(firstMsan);
             
         } catch (error) {
@@ -78,24 +96,24 @@ class NetworkDashboard {
     }
 
     validateData() {
-        return this.weData && 
+        const isValid = this.weData && 
                Array.isArray(this.weData) && 
                this.weData.length > 0 &&
                this.weData.some(item => item.MSANCODE);
+        
+        console.log('Data validation result:', isValid);
+        return isValid;
     }
 
     createDashboardControls() {
         const dashboardContainer = document.getElementById('dashboard-container');
         if (!dashboardContainer) return;
 
-        // Create control container
         const controlsDiv = document.createElement('div');
         controlsDiv.className = 'dashboard-controls';
 
-        // MSANCODE selector
         const msanSelectorDiv = this.createMsanSelector();
         
-        // Visualization container
         const vizContainer = document.createElement('div');
         vizContainer.id = 'dashboard-viz';
         vizContainer.className = 'dashboard-viz-container';
@@ -116,28 +134,19 @@ class NetworkDashboard {
         const msanSelector = document.createElement('select');
         msanSelector.id = 'msan-selector';
 
-        // Get unique MSANCODEs with validation
         const msanCodes = [...new Set(
             this.weData
                 .filter(item => item.MSANCODE)
                 .map(item => item.MSANCODE)
         )].sort();
 
-        if (msanCodes.length === 0) {
+        msanCodes.forEach(code => {
             const option = document.createElement('option');
-            option.textContent = 'No MSANCODEs available';
-            option.disabled = true;
+            option.value = code;
+            option.textContent = code;
             msanSelector.appendChild(option);
-        } else {
-            msanCodes.forEach(code => {
-                const option = document.createElement('option');
-                option.value = code;
-                option.textContent = code;
-                msanSelector.appendChild(option);
-            });
-        }
+        });
 
-        // Add event listener with cleanup tracking
         const changeHandler = () => this.updateVisualization(msanSelector.value);
         msanSelector.addEventListener('change', changeHandler);
         this.eventListeners.push({ element: msanSelector, event: 'change', handler: changeHandler });
@@ -149,15 +158,17 @@ class NetworkDashboard {
     }
 
     updateVisualization(msanCode) {
+        console.log('=== UPDATE VISUALIZATION ===');
+        console.log('MSAN Code:', msanCode);
+        console.log('Failed Node ID:', this.failedNodeId);
+        
         const vizContainer = document.getElementById('dashboard-viz');
         if (!vizContainer) return;
 
-        // Stop previous simulation
         if (this.currentSimulation) {
             this.currentSimulation.stop();
         }
 
-        // Filter and validate data
         const filteredData = this.weData.filter(item => 
             item.MSANCODE === msanCode && (item.Path || item.Path2)
         );
@@ -179,19 +190,18 @@ class NetworkDashboard {
     }
 
     createNetworkVisualization(container, data, msanCode) {
-        // Create header
+        console.log('=== CREATE NETWORK VISUALIZATION ===');
+        
         const header = document.createElement('h3');
         header.textContent = `Network Path Visualization for ${msanCode}`;
         container.appendChild(header);
 
-        // Create SVG container
         const svgContainer = document.createElement('div');
         svgContainer.id = 'dashboard-network-viz';
         svgContainer.className = 'network-viz-svg';
         svgContainer.style.minHeight = '400px';
         container.appendChild(svgContainer);
 
-        // Process data
         const { nodes, links } = this.processNetworkData(data);
         
         if (nodes.length === 0) {
@@ -205,16 +215,14 @@ class NetworkDashboard {
     processNetworkData(data) {
         const allNodes = new Set();
         const links = [];
-        const linkMap = new Map(); // Prevent duplicate links
+        const linkMap = new Map();
 
         data.forEach(record => {
             const path1 = this.parsePath(record.Path);
             const path2 = this.parsePath(record.Path2);
             
-            // Process primary path
             this.processPath(path1, 'primary', allNodes, links, linkMap);
             
-            // Process backup path
             if (path2.length > 0) {
                 this.processPath(path2, 'backup', allNodes, links, linkMap);
             }
@@ -243,6 +251,10 @@ class NetworkDashboard {
     }
 
     renderD3Visualization(container, nodes, links) {
+        console.log('=== RENDER D3 VISUALIZATION ===');
+        console.log('Nodes to render:', nodes.map(n => n.id));
+        console.log('Failed node to highlight:', this.failedNodeId);
+        
         const width = Math.max(container.clientWidth || 800, 600);
         const height = 400;
 
@@ -254,7 +266,6 @@ class NetworkDashboard {
             .style('max-width', '100%')
             .style('height', 'auto');
 
-        // Create simulation
         this.currentSimulation = d3.forceSimulation(nodes)
             .force('link', d3.forceLink(links).id(d => d.id).distance(80))
             .force('charge', d3.forceManyBody().strength(-200))
@@ -271,23 +282,27 @@ class NetworkDashboard {
             .attr('stroke', d => d.type === 'primary' ? '#4CAF50' : '#FF9800')
             .attr('stroke-dasharray', d => d.type === 'backup' ? '5,5' : null);
 
-        // Create nodes
+        // Create nodes with debugging
         const node = svg.append('g')
             .attr('class', 'nodes')
             .selectAll('circle')
             .data(nodes)
             .enter().append('circle')
             .attr('r', 12)
-            .attr('fill', '#2196F3')
-            .attr('stroke', '#fff')
-            .attr('stroke-width', 2)
+            .attr('fill', d => {
+                const isFailed = this.isFailedNode(d.id);
+                return isFailed ? '#ff0000' : '#2196F3';
+            })
+            .attr('stroke', d => this.isFailedNode(d.id) ? '#ff0000' : '#fff')
+            .attr('stroke-width', d => this.isFailedNode(d.id) ? 3 : 2)
+            .attr('class', d => this.isFailedNode(d.id) ? 'failed-node' : '')
             .style('cursor', 'grab')
             .call(d3.drag()
                 .on('start', (event, d) => this.dragStarted(event, d))
                 .on('drag', (event, d) => this.dragged(event, d))
                 .on('end', (event, d) => this.dragEnded(event, d)));
 
-        // Add labels
+        // Create labels
         const label = svg.append('g')
             .attr('class', 'labels')
             .selectAll('text')
@@ -296,11 +311,13 @@ class NetworkDashboard {
             .text(d => d.id)
             .attr('font-size', '11px')
             .attr('font-family', 'Arial, sans-serif')
+            .attr('font-weight', d => this.isFailedNode(d.id) ? 'bold' : 'normal')
+            .attr('fill', d => this.isFailedNode(d.id) ? '#ff0000' : '#333')
             .attr('dx', 15)
             .attr('dy', 4)
+            .attr('class', d => this.isFailedNode(d.id) ? 'failed-node' : '')
             .style('pointer-events', 'none');
 
-        // Update on tick
         this.currentSimulation.on('tick', () => {
             link
                 .attr('x1', d => d.source.x)
@@ -320,12 +337,36 @@ class NetworkDashboard {
         this.addLegend(svg);
     }
 
+    isFailedNode(nodeId) {
+        if (!this.failedNodeId || !nodeId) {
+            return false;
+        }
+        
+        // Normalize strings for comparison
+        const normalize = (str) => {
+            return String(str).toLowerCase().trim().replace(/\s+/g, '');
+        };
+        
+        const normalizedNode = normalize(nodeId);
+        const normalizedFailed = normalize(this.failedNodeId);
+        
+        // Check for exact match or partial match (in case of hostname variations)
+        const isFailed = normalizedNode === normalizedFailed || 
+                        normalizedNode.includes(normalizedFailed) ||
+                        normalizedFailed.includes(normalizedNode);
+        
+        if (isFailed) {
+            console.log(`FAILED NODE MATCH: ${nodeId} vs ${this.failedNodeId}`);
+        }
+        
+        return isFailed;
+    }
+
     addLegend(svg) {
         const legend = svg.append('g')
             .attr('class', 'legend')
             .attr('transform', 'translate(20, 20)');
 
-        // Primary path legend
         legend.append('line')
             .attr('x1', 0).attr('y1', 0)
             .attr('x2', 20).attr('y2', 0)
@@ -338,7 +379,6 @@ class NetworkDashboard {
             .attr('font-size', '12px')
             .attr('font-family', 'Arial, sans-serif');
 
-        // Backup path legend
         legend.append('line')
             .attr('x1', 0).attr('y1', 20)
             .attr('x2', 20).attr('y2', 20)
@@ -349,6 +389,32 @@ class NetworkDashboard {
         legend.append('text')
             .text('Backup Path')
             .attr('x', 25).attr('y', 25)
+            .attr('font-size', '12px')
+            .attr('font-family', 'Arial, sans-serif');
+
+        legend.append('circle')
+            .attr('cx', 10).attr('cy', 45)
+            .attr('r', 6)
+            .attr('fill', '#ff0000')
+            .attr('stroke', '#fff')
+            .attr('stroke-width', 1);
+
+        legend.append('text')
+            .text('Failed Node')
+            .attr('x', 25).attr('y', 50)
+            .attr('font-size', '12px')
+            .attr('font-family', 'Arial, sans-serif');
+
+        legend.append('circle')
+            .attr('cx', 10).attr('cy', 65)
+            .attr('r', 6)
+            .attr('fill', '#2196F3')
+            .attr('stroke', '#fff')
+            .attr('stroke-width', 1);
+
+        legend.append('text')
+            .text('Normal Node')
+            .attr('x', 25).attr('y', 70)
             .attr('font-size', '12px')
             .attr('font-family', 'Arial, sans-serif');
     }
@@ -390,18 +456,11 @@ class NetworkDashboard {
         const recordDiv = document.createElement('div');
         recordDiv.className = 'path-record';
         
-        const recordHeader = document.createElement('h4');
-        //recordHeader.textContent = `Record ${index + 1}`;
-        // Define custom names for the first two records
         const recordNames = ['Main logical Path', 'Backup Logical Path'];
+        const recordHeader = document.createElement('h4');
         recordHeader.textContent = recordNames[index] || `Record ${index + 1}`;
-
-        // debug log message
-        console.log('Setting header text to:', recordHeader.textContent);
-        
         recordDiv.appendChild(recordHeader);
         
-        // Impact information
         const impactPara = document.createElement('p');
         const impactText = document.createElement('strong');
         impactText.textContent = 'Impact: ';
@@ -411,12 +470,10 @@ class NetworkDashboard {
         impactPara.className = `impact-${(record.Impact || 'unknown').toLowerCase().replace(/\s+/g, '-')}`;
         recordDiv.appendChild(impactPara);
         
-        // Primary path
         if (record.Path) {
             this.addPathSection(recordDiv, 'Primary Physical Path', record.Path);
         }
         
-        // Backup path
         if (record.Path2) {
             this.addPathSection(recordDiv, 'Backup Physical Path', record.Path2);
         }
@@ -441,6 +498,15 @@ class NetworkDashboard {
             path.forEach(node => {
                 const li = document.createElement('li');
                 li.textContent = node;
+                
+                if (this.isFailedNode(node)) {
+                    li.style.color = '#ff0000';
+                    li.style.fontWeight = 'bold';
+                    li.style.backgroundColor = '#ffebee';
+                    li.style.padding = '2px 4px';
+                    li.style.borderRadius = '3px';
+                }
+                
                 pathList.appendChild(li);
             });
         }
@@ -462,7 +528,6 @@ class NetworkDashboard {
                     return parsed.filter(item => item != null && item !== '');
                 }
             } catch (e) {
-                // If JSON parsing fails, try other formats
                 if (path.startsWith('[') && path.endsWith(']')) {
                     return path.slice(1, -1)
                         .split(',')
@@ -470,7 +535,6 @@ class NetworkDashboard {
                         .filter(item => item !== '');
                 }
                 
-                // Return as single item if not empty
                 return path.trim() ? [path.trim()] : [];
             }
         }
@@ -494,13 +558,11 @@ class NetworkDashboard {
     }
 
     cleanup() {
-        // Stop simulation
         if (this.currentSimulation) {
             this.currentSimulation.stop();
             this.currentSimulation = null;
         }
 
-        // Remove event listeners
         this.eventListeners.forEach(({ element, event, handler }) => {
             if (element && element.removeEventListener) {
                 element.removeEventListener(event, handler);
@@ -512,14 +574,10 @@ class NetworkDashboard {
     destroy() {
         this.cleanup();
         
-        // Disconnect observers
         this.observers.forEach(observer => observer.disconnect());
         this.observers = [];
         
         this.weData = null;
+        this.failedNodeId = null;
     }
 }
-
-// Usage example:
-// const dashboard = new NetworkDashboard();
-// dashboard.initialize(weData);

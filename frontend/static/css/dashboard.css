@@ -162,3 +162,19 @@ padding-bottom: 8px;
         padding: 10px;
     }
 }
+
+.dashboard-viz-container .nodes circle.failed-node {
+    filter: drop-shadow(0 0 5px rgba(255, 0, 0, 0.5));
+    animation: pulse 2s infinite;
+}
+
+.dashboard-viz-container .labels text.failed-node {
+    font-weight: bold;
+    fill: #ff0000 !important;
+}
+
+@keyframes pulse {
+    0% { r: 12; }
+    50% { r: 14; }
+    100% { r: 12; }
+}

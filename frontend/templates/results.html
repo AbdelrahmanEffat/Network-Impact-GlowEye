@@ -633,12 +633,64 @@
     <script src="/static/js/script.js"></script>
     <script src="/static/js/dashboard.js"></script>
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Initialize charts with data from the API response
-            // Impact distribution chart
-            const impactCtx = document.getElementById('impactChart').getContext('2d');
-            
-            // Get real impact data from the results
+    // Convert Jinja template variables to JavaScript variables with proper fallbacks
+    let weData = [];
+    let othersData = [];
+    let identifier = '';
+    let identifierType = '';
+
+    try {
+        weData = {{ (we_data.to_dict('records') if we_data is defined and not we_data.empty else []) | tojson | safe }};
+        othersData = {{ (others_data.to_dict('records') if others_data is defined and not others_data.empty else []) | tojson | safe }};
+        identifier = "{{ identifier if identifier is defined else '' }}";
+        identifierType = "{{ identifier_type if identifier_type is defined else '' }}";
+    } catch (e) {
+        console.error("Error loading template data:", e);
+    }
+
+    console.log("Data loaded:", {
+        weData: weData ? weData.length : 0,
+        othersData: othersData ? othersData.length : 0,
+        identifier: identifier,
+        identifierType: identifierType
+    });
+
+    // Single DOMContentLoaded event listener
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('=== PAGE LOADED ===');
+        
+        // Initialize charts
+        initializeCharts();
+        
+        // Initialize dashboard if data is available
+        if (typeof NetworkDashboard !== 'undefined' && weData && weData.length > 0) {
+            initializeDashboard();
+        } else {
+            console.warn('Dashboard not initialized - missing requirements:', {
+                NetworkDashboard: typeof NetworkDashboard,
+                weDataExists: !!weData,
+                weDataLength: weData ? weData.length : 0
+            });
+        }
+        
+        // Initialize pagination if function exists
+        if (typeof setupPagination === 'function') {
+            setupPagination('we-table', 50);
+            setupPagination('others-table', 50);
+        } else {
+            console.log('setupPagination function not available - pagination disabled');
+        }
+        
+        // Initialize ISP tabs functionality
+        initializeIspTabs();
+    });
+
+    function initializeCharts() {
+        console.log('Initializing charts...');
+        
+        // Impact distribution chart
+        const impactCtx = document.getElementById('impactChart')?.getContext('2d');
+        if (impactCtx) {
             const impactData = {
                 labels: ['Isolated', 'Partially Impacted'],
                 datasets: [{
@@ -660,9 +712,11 @@
                     }
                 }
             });
-            
-            // WE MSANs Chart
-            const weMsansCtx = document.getElementById('weMsansChart').getContext('2d');
+        }
+        
+        // WE MSANs Chart
+        const weMsansCtx = document.getElementById('weMsansChart')?.getContext('2d');
+        if (weMsansCtx) {
             new Chart(weMsansCtx, {
                 type: 'bar',
                 data: {
@@ -683,9 +737,11 @@
                     }
                 }
             });
-            
-            // WE Subscribers Chart
-            const weSubscribersCtx = document.getElementById('weSubscribersChart').getContext('2d');
+        }
+        
+        // WE Subscribers Chart
+        const weSubscribersCtx = document.getElementById('weSubscribersChart')?.getContext('2d');
+        if (weSubscribersCtx) {
             new Chart(weSubscribersCtx, {
                 type: 'bar',
                 data: {
@@ -706,9 +762,11 @@
                     }
                 }
             });
-            
-            // Others MSANs Chart
-            const othersMsansCtx = document.getElementById('othersMsansChart').getContext('2d');
+        }
+        
+        // Others MSANs Chart
+        const othersMsansCtx = document.getElementById('othersMsansChart')?.getContext('2d');
+        if (othersMsansCtx) {
             new Chart(othersMsansCtx, {
                 type: 'bar',
                 data: {
@@ -729,9 +787,11 @@
                     }
                 }
             });
-            
-            // Others Subscribers Chart
-            const othersSubscribersCtx = document.getElementById('othersSubscribersChart').getContext('2d');
+        }
+        
+        // Others Subscribers Chart
+        const othersSubscribersCtx = document.getElementById('othersSubscribersChart')?.getContext('2d');
+        if (othersSubscribersCtx) {
             new Chart(othersSubscribersCtx, {
                 type: 'bar',
                 data: {
@@ -752,9 +812,11 @@
                     }
                 }
             });
-            
-            // ISP Breakdown Chart
-            const ispBreakdownCtx = document.getElementById('ispBreakdownChart').getContext('2d');
+        }
+        
+        // ISP Breakdown Chart
+        const ispBreakdownCtx = document.getElementById('ispBreakdownChart')?.getContext('2d');
+        if (ispBreakdownCtx) {
             new Chart(ispBreakdownCtx, {
                 type: 'bar',
                 data: {
@@ -827,76 +889,50 @@
                     }
                 }
             });
-            
+        }
+    }
 
-            // Initialize pagination for each table
-            setupPagination('we-table', 50);
-            setupPagination('others-table', 50);
+    function initializeDashboard() {
+        console.log('=== INITIALIZING DASHBOARD ===');
+        console.log('Dashboard data:', {
+            weDataLength: weData.length,
+            identifier: identifier
         });
-
-        document.addEventListener('DOMContentLoaded', function() {
-            // ISP tab functionality
-            const ispTabButtons = document.querySelectorAll('.isp-tab-button');
-            const ispTabContents = document.querySelectorAll('.isp-tab-content');
+        
+        window.networkDashboard = new NetworkDashboard();
+        
+        if (window.networkDashboard.initialize(weData, identifier)) {
+            console.log('Dashboard initialized successfully with failed node:', identifier);
             
-            ispTabButtons.forEach(button => {
-                button.addEventListener('click', function() {
-                    const isp = this.getAttribute('data-isp');
-                    
-                    // Remove active class from all buttons and contents
-                    ispTabButtons.forEach(btn => btn.classList.remove('active'));
-                    ispTabContents.forEach(content => content.classList.remove('active'));
-                    
-                    // Add active class to clicked button and corresponding content
-                    this.classList.add('active');
-                    document.getElementById(`${isp}-tab`).classList.add('active');
-                });
+            // Force render dashboard immediately for testing
+            setTimeout(() => {
+                if (window.networkDashboard.renderDashboard) {
+                    window.networkDashboard.renderDashboard();
+                }
+            }, 500);
+        } else {
+            console.error('Failed to initialize dashboard');
+        }
+    }
+
+    function initializeIspTabs() {
+        const ispTabButtons = document.querySelectorAll('.isp-tab-button');
+        const ispTabContents = document.querySelectorAll('.isp-tab-content');
+        
+        ispTabButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const isp = this.getAttribute('data-isp');
+                
+                // Remove active class from all buttons and contents
+                ispTabButtons.forEach(btn => btn.classList.remove('active'));
+                ispTabContents.forEach(content => content.classList.remove('active'));
+                
+                // Add active class to clicked button and corresponding content
+                this.classList.add('active');
+                document.getElementById(`${isp}-tab`).classList.add('active');
             });
         });
-
-        // Convert Jinja template variables to JavaScript variables with proper fallbacks
-        let weData = [];
-        let othersData = [];
-        let identifier = '';
-        let identifierType = '';
-        
-        try {
-            weData = {{ (we_data.to_dict('records') if we_data is defined and not we_data.empty else []) | tojson | safe }};
-            othersData = {{ (others_data.to_dict('records') if others_data is defined and not others_data.empty else []) | tojson | safe }};
-            identifier = "{{ identifier if identifier is defined else '' }}";
-            identifierType = "{{ identifier_type if identifier_type is defined else '' }}";
-        } catch (e) {
-            console.error("Error loading template data:", e);
-            // Variables already initialized with empty defaults above
-        }
-        
-        console.log("Data loaded:", {
-            weData: weData ? weData.length : 0,
-            othersData: othersData ? othersData.length : 0,
-            identifier: identifier,
-            identifierType: identifierType
-        });
-
-        // Add this to your existing script section in results.html
-        document.addEventListener('DOMContentLoaded', function() {
-            // Your existing chart initialization code here...
-            
-            // Initialize Dashboard as global variable
-            if (typeof NetworkDashboard !== 'undefined' && weData && weData.length > 0) {
-                window.networkDashboard = new NetworkDashboard();
-                if (window.networkDashboard.initialize(weData)) {
-                    console.log('Dashboard initialized successfully');
-                } else {
-                    console.error('Failed to initialize dashboard - missing dependencies');
-                }
-            } else {
-                console.warn('Dashboard not initialized - missing data or NetworkDashboard class');
-            }
-            
-            // Your existing pagination setup...
-            setupPagination('we-table', 50);
-            setupPagination('others-table', 50);
-        });
+    }
     </script>
 </body>
 </html>

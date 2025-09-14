@@ -130,6 +130,7 @@ async def analyze_network_impact(request: AnalysisRequest):
         # Run the impact analysis on both data types
         if request.identifier_type == 'exchange' or (request.identifier_type == 'auto' and _is_exchange_identifier(request.identifier)):
             we_results = we_analyzer.analyze_exchange_impact(request.identifier)
+            we_results = we_results.drop_duplicates(subset=['MSANCODE', 'STATUS'])
             others_results = others_analyzer.analyze_exchange_impact(request.identifier)
             analysis_type = "Exchange"
         else:
