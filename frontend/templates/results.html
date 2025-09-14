@@ -7,6 +7,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="/static/css/style.css">
     <link rel="stylesheet" href="/static/css/dashboard.css">
+    <link rel="stylesheet" href="/static/css/dashboard-o.css">
     <style>
         .isp-breakdown-section {
             margin-top: 30px;
@@ -208,7 +209,8 @@
                 <button class="tab-button" data-tab="others-tab">Others Data</button>
                 <button class="tab-button" data-tab="charts-tab">Charts</button>
                 <button class="tab-button" data-tab="topology-tab">Network Topology</button>
-                <button class="tab-button" data-tab="dashboard-tab">Dashboard</button>
+                <button class="tab-button" data-tab="dashboard-tab">Dashboard-WE</button>
+                <button class="tab-button" data-tab="dashboard-tab-other">Dashboard-other</button>
             </div>
             
             <div id="we-tab" class="tab-content active">
@@ -628,10 +630,22 @@
             </div>
         </div>
     </div>
+      <div id="dashboard-tab-other" class="tab-content">
+                <div class="section">
+                    <h2 class="section-title">Path Analysis Dashboard</h2>
+                    <div id="dashboard-container-other">
+                        <p>Select an MSANCODE to visualize its network paths.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="/static/js/script.js"></script>
     <script src="/static/js/dashboard.js"></script>
+    <script src="/static/js/dashboard-o.js"></script>
+    
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             // Initialize charts with data from the API response
@@ -885,18 +899,32 @@
             if (typeof NetworkDashboard !== 'undefined' && weData && weData.length > 0) {
                 window.networkDashboard = new NetworkDashboard();
                 if (window.networkDashboard.initialize(weData)) {
-                    console.log('Dashboard initialized successfully');
+                   // console.log('Dashboard initialized successfully');
                 } else {
                     console.error('Failed to initialize dashboard - missing dependencies');
                 }
-            } else {
-                console.warn('Dashboard not initialized - missing data or NetworkDashboard class');
-            }
+
+            } 
             
             // Your existing pagination setup...
             setupPagination('we-table', 50);
             setupPagination('others-table', 50);
         });
+
+        
     </script>
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        if (typeof NetworkDashboardOthers !== 'undefined' && othersData && othersData.length > 0) {
+            window.othersDashboard = new NetworkDashboardOthers();
+            window.othersDashboard.initialize(othersData);
+        }
+
+    setTimeout(() => {
+    window.othersDashboard.renderDashboard();
+}, 1000);
+    });
+
+</script>
 </body>
 </html>
