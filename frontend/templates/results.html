@@ -7,6 +7,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="/static/css/style.css">
     <link rel="stylesheet" href="/static/css/dashboard.css">
+    <link rel="stylesheet" href="/static/css/dashboard-o.css">
     <style>
         .isp-breakdown-section {
             margin-top: 30px;
@@ -126,7 +127,21 @@
             .isp-tabs {
                 flex-wrap: wrap;
             }
-            
+            .stat-cards-container {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px; /* optional spacing between cards */
+    margin-bottom: 20px;
+}
+
+.stat-card {
+    flex: 1; /* Make each card take equal width */
+    background-color: #f5f5f5;
+    padding: 20px;
+    border-radius: 8px;
+    text-align: center;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
             .isp-tab-button {
                 padding: 8px 12px;
                 font-size: 14px;
@@ -208,7 +223,8 @@
                 <button class="tab-button" data-tab="others-tab">Others Data</button>
                 <button class="tab-button" data-tab="charts-tab">Charts</button>
                 <button class="tab-button" data-tab="topology-tab">Network Topology</button>
-                <button class="tab-button" data-tab="dashboard-tab">Dashboard</button>
+                <button class="tab-button" data-tab="dashboard-tab">Dashboard-WE</button>
+                <button class="tab-button" data-tab="dashboard-tab-other">Dashboard-Others</button>
             </div>
             
             <div id="we-tab" class="tab-content active">
@@ -245,6 +261,8 @@
                                     <th>BNG Hostname</th>
                                     <th>Status</th>
                                     <th>Customer Count</th>
+                                    <th>Voice-Customer Count</th>
+                                    <th>Data-Customer Count</th>
                                     <th>Impact</th>
                                     <th>cir_type</th>
                                     <th>Physical Path</th>
@@ -260,6 +278,8 @@
                                     <td>{{ record.BNG_HOSTNAME }}</td>
                                     <td>{{ record.STATUS }}</td>
                                     <td>{{ record.CUST }}</td>
+                                    <td>{{ record.TOTAL_VOICE_CUST }}</td>
+                                    <td>{{ record.TOTAL_DATA_CUST }}</td>
                                     <td>{{ record.Impact }}</td>
                                     <td>{{ record.cir_type }}</td>
                                     <td>{{ record.Path }}</td>
@@ -363,25 +383,65 @@
                     <!-- WE Statistics Section -->
                     <div class="stats-section">
                         <h3 class="subsection-title">WE Impact Statistics</h3>
-                        
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
-                            <div class="stat-card">
-                                <div class="stat-value">{{ we_stats.isolated_msans if we_stats else 0 }}</div>
-                                <div class="stat-label">Isolated MSANs</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-value">{{ we_stats.partial_msans if we_stats else 0 }}</div>
-                                <div class="stat-label">Partially Impacted MSANs</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-value">{{ we_stats.isolated_sub if we_stats else 0 }}</div>
-                                <div class="stat-label">Isolated Subscribers</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-value">{{ we_stats.partial_sub if we_stats else 0 }}</div>
-                                <div class="stat-label">Partially Impacted Subscribers</div>
-                            </div>
-                        </div>
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+
+    <!-- Column 1: Isolated -->
+    <div>
+        <div class="stat-card">
+            <div class="stat-value">{{ we_stats.isolated_msans if we_stats else 0 }}</div>
+            <div class="stat-label">Isolated MSANs</div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-value">{{ we_stats.iso_vic if we_stats else 0 }}</div>
+            <div class="stat-label">Isolated VIC Cabinets</div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-value">{{ we_stats.isolated_sub if we_stats else 0 }}</div>
+            <div class="stat-label">Isolated Subscribers</div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-value">{{ we_stats.isolated_sub_voice if we_stats else 0 }}</div>
+            <div class="stat-label">Total voice only customers</div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-value">{{ we_stats.isolated_sub_data if we_stats else 0 }}</div>
+            <div class="stat-label">Total data customers</div>
+        </div>
+    </div>
+
+    <!-- Column 2: Partial -->
+    <div>
+        <div class="stat-card">
+            <div class="stat-value">{{ we_stats.partial_msans if we_stats else 0 }}</div>
+            <div class="stat-label">Partially Impacted MSANs</div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-value">{{ we_stats.partial_vic if we_stats else 0 }}</div>
+            <div class="stat-label">Partially Impacted VIC Cabinets</div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-value">{{ we_stats.partial_sub if we_stats else 0 }}</div>
+            <div class="stat-label">Partial Impacted Subscribers</div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-value">{{ we_stats.partial_sub_voice if we_stats else 0 }}</div>
+            <div class="stat-label">Total voice only customers</div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-value">{{ we_stats.partial_sub_data if we_stats else 0 }}</div>
+            <div class="stat-label">Total data customers</div>
+        </div>
+    </div>
+</div>
+
                         
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                             <div class="chart-container">
@@ -393,29 +453,48 @@
                         </div>
                     </div>
 
-                    <!-- Others Statistics Section -->
-                    <div class="stats-section">
-                        <h3 class="subsection-title">Others Impact Statistics</h3>
-                        
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
-                            <div class="stat-card">
-                                <div class="stat-value">{{ others_stats.isolated_msans if others_stats else 0 }}</div>
-                                <div class="stat-label">Isolated MSANs</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-value">{{ others_stats.partial_msans if others_stats else 0 }}</div>
-                                <div class="stat-label">Partially Impacted MSANs</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-value">{{ others_stats.isolated_sub if others_stats else 0 }}</div>
-                                <div class="stat-label">Isolated Subscribers</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-value">{{ others_stats.partial_sub if others_stats else 0 }}</div>
-                                <div class="stat-label">Partially Impacted Subscribers</div>
-                            </div>
-                        </div>
-                        
+                   <div class="stats-section">
+    <h3 class="subsection-title">Others Impact Statistics</h3>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+
+        <!-- Left Column: Isolated -->
+        <div>
+            <div class="stat-card">
+                <div class="stat-value">{{ others_stats.isolated_msans if others_stats else 0 }}</div>
+                <div class="stat-label">Isolated MSANs</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ others_stats.o_iso_vic if others_stats else 0 }}</div>
+                <div class="stat-label">Isolated VIC Cabinets for others</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ others_stats.isolated_sub if others_stats else 0 }}</div>
+                <div class="stat-label">Isolated Subscribers</div>
+            </div>
+           
+        </div>
+
+        <!-- Right Column: Partial -->
+        <div>
+            <div class="stat-card">
+                <div class="stat-value">{{ others_stats.partial_msans if others_stats else 0 }}</div>
+                <div class="stat-label">Partially Impacted MSANs</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ others_stats.o_partial_vic if others_stats else 0 }}</div>
+                <div class="stat-label">Partially Impacted  on VIC cabinets for Others</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ others_stats.partial_sub if others_stats else 0 }}</div>
+                <div class="stat-label">Partially Impacted Subscribers</div>
+            </div>
+          
+        </div>
+
+    </div>
+</div>
+
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px;">
                             <div class="chart-container">
                                 <canvas id="othersMsansChart"></canvas>
@@ -470,6 +549,10 @@
                                             <span class="service-label">HS FTTH</span>
                                             <span class="service-value">{{ others_stats.isolated_voda_hs_ftth if others_stats else 0 }}</span>
                                         </div>
+                                        <div class="service-stat">
+                                            <span class="service-label">WRONG VLAN</span>
+                                            <span class="service-value">{{ others_stats.wrong_voda | default(0, true) }}</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -508,6 +591,10 @@
                                         <div class="service-stat">
                                             <span class="service-label">HS FTTH</span>
                                             <span class="service-value">{{ others_stats.isolated_orange_hs_ftth if others_stats else 0 }}</span>
+                                        </div>
+                                         <div class="service-stat">
+                                            <span class="service-label">WRONG VLAN</span>
+                                            <span class="service-value">{{ others_stats.wrong_orange if others_stats else 0 }}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -548,6 +635,10 @@
                                             <span class="service-label">HS FTTH</span>
                                             <span class="service-value">{{ others_stats.isolated_etisalat_hs_ftth if others_stats else 0 }}</span>
                                         </div>
+                                        <div class="service-stat">
+                                            <span class="service-label">WRONG VLAN</span>
+                                            <span class="service-value">{{ others_stats.wrong_ets if others_stats else 0 }}</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -587,6 +678,9 @@
                                             <span class="service-label">HS FTTH</span>
                                             <span class="service-value">{{ others_stats.isolated_noor_hs_ftth if others_stats else 0 }}</span>
                                         </div>
+                                        <div class="service-stat">
+                                            <span class="service-label">WRONG VLAN</span>
+                                        <span class="service-value">{{ others_stats.wrong_noor | default(0, true) }}</span>  </div>
                                     </div>
                                 </div>
                             </div>
@@ -626,12 +720,21 @@
                     </div>
                 </div>
             </div>
+            <div id="dashboard-tab-other" class="tab-content">
+                <div class="section">
+                    <h2 class="section-title">Path Analysis Dashboard</h2>
+                    <div id="dashboard-container-other">
+                        <p>Select an MSANCODE to visualize its network paths.</p>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="/static/js/script.js"></script>
     <script src="/static/js/dashboard.js"></script>
+    <script src="/static/js/dashboard-o.js"></script>
     <script>
     // Convert Jinja template variables to JavaScript variables with proper fallbacks
     let weData = [];
@@ -934,5 +1037,20 @@
         });
     }
     </script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        if (typeof NetworkDashboardOthers !== 'undefined' && othersData && othersData.length > 0) {
+            window.othersDashboard = new NetworkDashboardOthers();
+            window.othersDashboard.initialize(othersData);
+        }
+
+    setTimeout(() => {
+    window.othersDashboard.renderDashboard();
+}, 1000);
+    });
+
+</script>
+
+  
 </body>
 </html>

@@ -79,7 +79,14 @@ async def analyze_network_impact(
                 'isolated_msans': len(isolated_we),
                 'partial_msans': len(partial_we),
                 'isolated_sub': isolated_we['CUST'].sum() if not isolated_we.empty else 0,
-                'partial_sub': partial_we['CUST'].sum() if not partial_we.empty else 0
+                'partial_sub': partial_we['CUST'].sum() if not partial_we.empty else 0,
+                'isolated_sub_voice': isolated_we['TOTAL_VOICE_CUST'].sum() if not isolated_we.empty else 0,
+                'isolated_sub_data': isolated_we['TOTAL_DATA_CUST'].sum() if not isolated_we.empty else 0,
+                'partial_sub_voice': partial_we['TOTAL_VOICE_CUST'].sum() if not partial_we.empty else 0,
+                'partial_sub_data': partial_we['TOTAL_DATA_CUST'].sum() if not partial_we.empty else 0,
+
+                 'partial_vic':(partial_we['VIC'] == 'VIC').sum() if not partial_we.empty else 0,
+                 'iso_vic':(isolated_we['VIC']=='VIC').sum() if not isolated_we.empty else 0
             }
 
         # Calculate Others statistics
@@ -88,10 +95,12 @@ async def analyze_network_impact(
             others_unique = others_data.drop_duplicates(subset=['MSANCODE'])
             isolated_others = others_unique[others_unique['Impact'] == 'Isolated']
             partial_others = others_unique[others_unique['Impact'] == 'Partially Impacted']
-            
+            print(isolated_others['VODA_WORNG_VLAN'].sum())
             others_stats = {
                 'isolated_msans': len(isolated_others),
                 'partial_msans': len(partial_others),
+                'o_partial_vic':(partial_others['VIC'] == 'VIC').sum() if not partial_others.empty else 0,
+                'o_iso_vic':(isolated_others['VIC']=='VIC').sum() if not isolated_others.empty else 0,
                 'isolated_sub': isolated_others['TOTAL_OTHER_CUST'].sum() if not isolated_others.empty else 0,
                 'partial_sub': partial_others['TOTAL_OTHER_CUST'].sum() if not partial_others.empty else 0,
                 'isolated_voda': isolated_others['VODA_CUST'].sum() if not isolated_others.empty else 0,
@@ -113,7 +122,14 @@ async def analyze_network_impact(
                 'isolated_noor_ubb': isolated_others['NOOR_UBBT_CUST'].sum() if not isolated_others.empty else 0,
                 'isolated_noor_hs': isolated_others['NOOR_HS_CUST'].sum() if not isolated_others.empty else 0,
                 'isolated_noor_ubb_ftth': isolated_others['NOOR_UBBT_FTTH_CUST'].sum() if not isolated_others.empty else 0,
-                'isolated_noor_hs_ftth': isolated_others['NOOR_HS_FTTH_CUST'].sum() if not isolated_others.empty else 0
+                'isolated_noor_hs_ftth': isolated_others['NOOR_HS_FTTH_CUST'].sum() if not isolated_others.empty else 0,
+                'wrong_noor': isolated_others['NOOR_WRONG_VLAN'].sum() if not isolated_others.empty else 0,
+                'wrong_voda': isolated_others['VODA_WORNG_VLAN'].sum() if not isolated_others.empty else 0 ,
+                'wrong_orange': isolated_others['ORANGE_WORNG_VLAN'].sum() if not isolated_others.empty else 0,
+                'wrong_ets': isolated_others['ETISLAT_WRONG_VLAN'].sum() if not isolated_others.empty else 0
+           
+
+           
             }
 
         # Add these to template_data
@@ -127,6 +143,7 @@ async def analyze_network_impact(
             "we_stats": we_stats,
             "others_stats": others_stats,
             "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
         }
         
         return templates.TemplateResponse("results.html", template_data)
@@ -139,6 +156,7 @@ async def analyze_network_impact(
         )
 
 @app.post("/api/analyze")
+
 async def api_analyze_network_impact(identifier: str, identifier_type: str = "auto"):
     """API endpoint to get analysis results"""
     try:

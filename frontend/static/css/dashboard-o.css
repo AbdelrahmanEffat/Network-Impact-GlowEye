@@ -1,0 +1,164 @@
+/* Dashboard specific styles */
+.dashboard-control-o {
+    margin-bottom: 20px;
+    padding: 15px;
+    background-color: #f9f9f9;
+    border-radius: 5px;
+}
+
+.dashboard-control-o label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: bold;
+}
+
+.dashboard-control-o select {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background-color: white;
+}
+
+.dashboard-viz-container-o {
+    margin-top: 20px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    padding: 15px;
+    background-color: white;
+}
+
+.network-viz-svg-o {
+    width: 100%;
+    height: 400px;
+    border: 1px solid #eee;
+    border-radius: 4px;
+    margin-bottom: 20px;
+    overflow: hidden;
+}
+
+.path-details-o {
+    margin-top: 30px;
+}
+
+.path-record-o {
+    margin-bottom: 20px;
+    padding: 15px;
+    border: 1px solid #eee;
+    border-radius: 5px;
+    background-color: #f9f9f9;
+}
+
+.path-record-o h4 {
+margin-top: 0;
+color: #2c3e50;
+border-bottom: 1px solid #ddd;
+padding-bottom: 8px;
+}
+
+.path-record-o h5 {
+    margin: 10px 0 5px 0;
+    color: #34495e;
+}
+
+.path-record-o ul {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.path-record-o li {
+    margin-bottom: 3px;
+    font-family: monospace;
+    font-size: 12px;
+}
+
+.impact-isolated-o {
+    color: #e74c3c;
+    font-weight: bold;
+}
+
+.impact-partially-impacted-o {
+    color: #f39c12;
+    font-weight: bold;
+}
+
+.impact-unknown-o {
+    color: #7f8c8d;
+    font-weight: bold;
+}
+
+.dashboard-error-o {
+    text-align: center;
+    padding: 40px;
+    color: #e74c3c;
+    background-color: #fdf2f2;
+    border-radius: 5px;
+    border: 1px solid #f5c6cb;
+}
+
+/* Legend styles */
+.legend-o text {
+    dominant-baseline: middle;
+}
+
+/* Add these classes to your existing dashboard.css */
+
+.dashboard-controls-o {
+    margin-bottom: 20px;
+}
+
+.no-data-message-o {
+    text-align: center;
+    padding: 40px 20px;
+    background-color: #f8f9fa;
+    border-radius: 5px;
+    color: #6c757d;
+    font-style: italic;
+}
+
+.no-data-message-o p {
+    margin: 0;
+    font-size: 16px;
+}
+
+/* Enhanced impact styling */
+.impact-isolated-o {
+    background-color: #ffebee;
+    border-left: 4px solid #e74c3c;
+}
+
+.impact-partially-impacted-o {
+    background-color: #fff3e0;
+    border-left: 4px solid #f39c12;
+}
+
+.impact-unknown-o {
+    background-color: #f5f5f5;
+    border-left: 4px solid #7f8c8d;
+}
+
+/* Loading states */
+.dashboard-loading-o {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 200px;
+    font-style: italic;
+    color: #6c757d;
+}
+
+/* Responsive design for dashboard */
+@media (max-width: 768px) {
+    .network-viz-svg-o {
+        height: 300px;
+    }
+    
+    .path-record-o {
+        margin-bottom: 15px;
+        padding: 10px;
+    }
+    
+    .dashboard-control-o {
+        padding: 10px;
+    }
+}

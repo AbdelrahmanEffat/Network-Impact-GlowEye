@@ -40,6 +40,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     }, 100);
                 }
             }
+             if (targetTab === 'dashboard-tab-other') {
+                if (window.othersDashboard && othersData && othersData.length > 0) {
+        // Ensure DOM is ready
+        setTimeout(() => {
+            // Manually trigger render (only if needed)
+            window.othersDashboard.renderDashboard();
+        }, 100);
+    }
+}
         });
     });
 });
