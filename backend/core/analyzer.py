@@ -65,7 +65,7 @@ class UnifiedNetworkImpactAnalyzer:
         if self.data_type == 'network':
             # Filter out records with null BNG_HOSTNAME and non-ST status (WE specific)
             df_filtered = self.df_report[
-                (self.df_report.BNG_HOSTNAME.isnull()) & (self.df_report.STATUS != 'ST')
+                (self.df_report.distribution_INT.isnull()) & (self.df_report.STATUS != 'ST')
             ]
             
             # Remove MSANCODEs from filtered records

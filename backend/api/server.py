@@ -52,7 +52,7 @@ async def startup_event():
     try:
         logger.info("Loading CSV files...")
         
-        data_path = r"C:\Users\secre\OneDrive\Desktop\network-impact-analysis\backend\data"
+        data_path = r"C:\Users\amr.emadeldeen\Desktop\Network-Impact-Analyzer-main\Network-Impact-GlowEye\backend\data"
         
         # Load your CSV files
         df_report_we = pd.read_csv(f'{data_path}\\Report(11).csv')  # WE data
