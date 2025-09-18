@@ -1036,21 +1036,26 @@
             });
         });
     }
-    </script>
-  <script>
+
     document.addEventListener('DOMContentLoaded', function () {
-        if (typeof NetworkDashboardOthers !== 'undefined' && othersData && othersData.length > 0) {
-            window.othersDashboard = new NetworkDashboardOthers();
-            window.othersDashboard.initialize(othersData);
-        }
+            if (typeof NetworkDashboardOthers !== 'undefined' && othersData && othersData.length > 0) {
+                window.othersDashboard = new NetworkDashboardOthers();
+                // Pass the identifier correctly
+                window.othersDashboard.initialize(othersData, "{{ identifier }}");
+            }
 
-    setTimeout(() => {
-    window.othersDashboard.renderDashboard();
-}, 1000);
-    });
-
-</script>
-
-  
+            // Add event listener for the Others tab
+            const othersTab = document.querySelector('[data-tab="dashboard-tab-other"]');
+            if (othersTab) {
+                othersTab.addEventListener('click', function() {
+                    setTimeout(() => {
+                        if (window.othersDashboard && window.othersDashboard.renderDashboard) {
+                            window.othersDashboard.renderDashboard();
+                        }
+                    }, 100);
+                });
+            }
+        });
+    </script>
 </body>
 </html>

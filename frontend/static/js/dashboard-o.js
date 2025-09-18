@@ -5,10 +5,12 @@ class NetworkDashboardOthers {
         this.currentSimulation = null;
         this.observers = [];
         this.eventListeners = [];
+        this.failedNodeId = null; // Add this property
     }
 
-    initialize(data) {
+    initialize(data, failedNodeId = null) {
         this.otherData = data;
+        this.failedNodeId = failedNodeId; // Store the failed node ID
         
         // Check dependencies
         if (typeof d3 === 'undefined') {
@@ -271,23 +273,27 @@ class NetworkDashboardOthers {
             .attr('stroke', d => d.type === 'primary' ? '#4CAF50' : '#FF9800')
             .attr('stroke-dasharray', d => d.type === 'backup' ? '5,5' : null);
 
-        // Create nodes
+        // Create nodes with failed node highlighting
         const node = svg.append('g')
             .attr('class', 'nodes')
             .selectAll('circle')
             .data(nodes)
             .enter().append('circle')
             .attr('r', 12)
-            .attr('fill', '#2196F3')
-            .attr('stroke', '#fff')
-            .attr('stroke-width', 2)
+            .attr('fill', d => {
+                const isFailed = this.isFailedNode(d.id);
+                return isFailed ? '#ff0000' : '#2196F3';
+            })
+            .attr('stroke', d => this.isFailedNode(d.id) ? '#ff0000' : '#fff')
+            .attr('stroke-width', d => this.isFailedNode(d.id) ? 3 : 2)
+            .attr('class', d => this.isFailedNode(d.id) ? 'failed-node' : '')
             .style('cursor', 'grab')
             .call(d3.drag()
                 .on('start', (event, d) => this.dragStarted(event, d))
                 .on('drag', (event, d) => this.dragged(event, d))
                 .on('end', (event, d) => this.dragEnded(event, d)));
 
-        // Add labels
+        // Add labels with failed node highlighting
         const label = svg.append('g')
             .attr('class', 'labels')
             .selectAll('text')
@@ -296,8 +302,11 @@ class NetworkDashboardOthers {
             .text(d => d.id)
             .attr('font-size', '11px')
             .attr('font-family', 'Arial, sans-serif')
+            .attr('font-weight', d => this.isFailedNode(d.id) ? 'bold' : 'normal')
+            .attr('fill', d => this.isFailedNode(d.id) ? '#ff0000' : '#333')
             .attr('dx', 15)
             .attr('dy', 4)
+            .attr('class', d => this.isFailedNode(d.id) ? 'failed-node' : '')
             .style('pointer-events', 'none');
 
         // Update on tick
@@ -318,6 +327,28 @@ class NetworkDashboardOthers {
         });
 
         this.addLegend(svg);
+    }
+
+    // Add method to check if a node is the failed node
+    isFailedNode(nodeId) {
+        if (!this.failedNodeId || !nodeId) {
+            return false;
+        }
+        
+        // Normalize strings for comparison
+        const normalize = (str) => {
+            return String(str).toLowerCase().trim().replace(/\s+/g, '');
+        };
+        
+        const normalizedNode = normalize(nodeId);
+        const normalizedFailed = normalize(this.failedNodeId);
+        
+        // Check for exact match or partial match
+        const isFailed = normalizedNode === normalizedFailed || 
+                        normalizedNode.includes(normalizedFailed) ||
+                        normalizedFailed.includes(normalizedNode);
+        
+        return isFailed;
     }
 
     addLegend(svg) {
@@ -349,6 +380,34 @@ class NetworkDashboardOthers {
         legend.append('text')
             .text('Backup Path')
             .attr('x', 25).attr('y', 25)
+            .attr('font-size', '12px')
+            .attr('font-family', 'Arial, sans-serif');
+
+        // Failed node legend
+        legend.append('circle')
+            .attr('cx', 10).attr('cy', 45)
+            .attr('r', 6)
+            .attr('fill', '#ff0000')
+            .attr('stroke', '#fff')
+            .attr('stroke-width', 1);
+
+        legend.append('text')
+            .text('Failed Node')
+            .attr('x', 25).attr('y', 50)
+            .attr('font-size', '12px')
+            .attr('font-family', 'Arial, sans-serif');
+
+        // Normal node legend
+        legend.append('circle')
+            .attr('cx', 10).attr('cy', 65)
+            .attr('r', 6)
+            .attr('fill', '#2196F3')
+            .attr('stroke', '#fff')
+            .attr('stroke-width', 1);
+
+        legend.append('text')
+            .text('Normal Node')
+            .attr('x', 25).attr('y', 70)
             .attr('font-size', '12px')
             .attr('font-family', 'Arial, sans-serif');
     }
@@ -391,13 +450,9 @@ class NetworkDashboardOthers {
         recordDiv.className = 'path-record-o';
         
         const recordHeader = document.createElement('h4');
-        //recordHeader.textContent = `Record ${index + 1}`;
         // Define custom names for the first two records
         const recordNames = ['Main logical Path', 'Backup Logical Path'];
         recordHeader.textContent = recordNames[index] || `Record ${index + 1}`;
-
-        // debug log message
-        console.log('Setting header text to:', recordHeader.textContent);
         
         recordDiv.appendChild(recordHeader);
         
@@ -441,6 +496,16 @@ class NetworkDashboardOthers {
             path.forEach(node => {
                 const li = document.createElement('li');
                 li.textContent = node;
+                
+                // Highlight failed nodes in the path
+                if (this.isFailedNode(node)) {
+                    li.style.color = '#ff0000';
+                    li.style.fontWeight = 'bold';
+                    li.style.backgroundColor = '#ffebee';
+                    li.style.padding = '2px 4px';
+                    li.style.borderRadius = '3px';
+                }
+                
                 pathList.appendChild(li);
             });
         }
@@ -519,7 +584,3 @@ class NetworkDashboardOthers {
         this.otherData = null;
     }
 }
-
-// Usage example:
-// const dashboard = new NetworkDashboard();
-// dashboard.initialize(otherData);
