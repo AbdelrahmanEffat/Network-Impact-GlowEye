@@ -739,12 +739,14 @@
     // Convert Jinja template variables to JavaScript variables with proper fallbacks
     let weData = [];
     let othersData = [];
+    let othersDataDash = [];
     let identifier = '';
     let identifierType = '';
 
     try {
         weData = {{ (we_data.to_dict('records') if we_data is defined and not we_data.empty else []) | tojson | safe }};
         othersData = {{ (others_data.to_dict('records') if others_data is defined and not others_data.empty else []) | tojson | safe }};
+        othersDataDash = {{ (others_dash.to_dict('records') if others_dash is defined and not others_dash.empty else []) | tojson | safe }};
         identifier = "{{ identifier if identifier is defined else '' }}";
         identifierType = "{{ identifier_type if identifier_type is defined else '' }}";
     } catch (e) {
@@ -1038,10 +1040,10 @@
     }
 
     document.addEventListener('DOMContentLoaded', function () {
-            if (typeof NetworkDashboardOthers !== 'undefined' && othersData && othersData.length > 0) {
+            if (typeof NetworkDashboardOthers !== 'undefined' && othersDataDash && othersDataDash.length > 0) {
                 window.othersDashboard = new NetworkDashboardOthers();
                 // Pass the identifier correctly
-                window.othersDashboard.initialize(othersData, "{{ identifier }}");
+                window.othersDashboard.initialize(othersDataDash, "{{ identifier }}"); //
             }
 
             // Add event listener for the Others tab

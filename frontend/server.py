@@ -131,6 +131,9 @@ async def analyze_network_impact(
 
            
             }
+        
+        # Remove Duplicated records for others path, based on ISP
+        others_dash = others_data.drop_duplicates(subset=['MSANCODE', 'EDGE', 'BITSTREAM_HOSTNAME'])
 
         # Add these to template_data
         template_data = {
@@ -140,6 +143,7 @@ async def analyze_network_impact(
             "result": result,
             "we_data": we_data,
             "others_data": others_data,
+            "others_dash": others_dash,
             "we_stats": we_stats,
             "others_stats": others_stats,
             "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
