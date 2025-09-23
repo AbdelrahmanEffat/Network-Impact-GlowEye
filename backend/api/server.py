@@ -55,11 +55,22 @@ async def startup_event():
         data_path = r"C:\Users\secre\OneDrive\Desktop\network-impact-analysis\backend\data"
         
         # Load your CSV files
-        df_report_we = pd.read_csv(f'{data_path}\\Report(11).csv')  # WE data
-        df_report_others = pd.read_csv(f'{data_path}\\Report(12).csv')  # Others data
+        df_report_we = pd.read_csv(f'{data_path}\\we.csv')  # WE data
+        df_report_others = pd.read_csv(f'{data_path}\\others.csv')  # Others data
         df_res_ospf = pd.read_csv(f'{data_path}\\res_ospf.csv')
         df_wan = pd.read_csv(f'{data_path}\\wan.csv')
         df_agg = pd.read_csv(f'{data_path}\\agg.csv')
+
+        ## maping columns names
+        df_report_others.columns = df_report_others.columns.str.upper()
+        df_report_we.columns = df_report_we.columns.str.upper()
+
+        df_report_others.rename(columns={'BITSTREAM_EXCHANGE':'Bitstream_exchange', 'EDGE_EXCHANGE':'EDGE_exchange'}, inplace=True)
+        df_report_we.rename(columns={'DISTRIBUTION_EMS':'distribution_ems', 'DISTRIBUTION_EXCHANGE':'distribution_Exchange',
+                                     'DISTRIBUTION_HOSTNAME':'distribution_hostname', 'DISTRIBUTION_INT':'distribution_INT',
+                                     'DISTRIBUTION_IP':'distribution_IP', 'DISTRIBUTION_NAME_EX':'distribution_name_ex',
+                                     'EDGE_EXCHANGE':'edge_exchange', 'EDGE_NAME_EX':'edge_name_ex',
+                                     'EDGE_PORT':'edge_port'}, inplace=True)
         
         # Initialize analyzers for both data types
         we_analyzer = UnifiedNetworkImpactAnalyzer(df_report_we, df_res_ospf, df_wan, df_agg)
