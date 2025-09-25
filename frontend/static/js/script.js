@@ -14,6 +14,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // Network Topology
     initializeNetworkVisualization();
 
+    // Add debug
+    setTimeout(debugFiltering, 1000);
+    
+    // Test filtering after a short delay
+    setTimeout(testFiltering, 2000);
+
     // Tab switching functionality (update existing code)
     const tabButtons = document.querySelectorAll('.tab-button');
     const tabContents = document.querySelectorAll('.tab-content');
@@ -71,51 +77,290 @@ function setupTabs() {
     });
 }
 
-
 function initializeFiltering() {
-    const filterSelects = document.querySelectorAll('.filter-select');
+    console.log('Initializing filtering...');
     
-    filterSelects.forEach(select => {
-        select.addEventListener('change', function() {
-            const columnIndex = parseInt(this.getAttribute('data-column'));
-            const filterValue = this.value.toLowerCase();
-            const table = this.closest('.section').querySelector('.data-table');
+    // Initialize filtering for WE table
+    initializeTableFiltering('we-tab', 'we-table');
+    
+    // Initialize filtering for Others table
+    initializeTableFiltering('others-tab', 'others-table');
+}
+
+function initializeTableFiltering(tabId, tableId) {
+    const tab = document.getElementById(tabId);
+    if (!tab) {
+        console.log(`Tab ${tabId} not found`);
+        return;
+    }
+    
+    const table = document.getElementById(tableId);
+    if (!table) {
+        console.log(`Table ${tableId} not found`);
+        return;
+    }
+    
+    const filterSelects = tab.querySelectorAll('.filter-select');
+    console.log(`Found ${filterSelects.length} filter selects for ${tabId}`);
+    
+    if (filterSelects.length === 0) {
+        console.log(`No filter selects found in ${tabId}`);
+        return;
+    }
+    
+    // Function to apply all active filters for this specific table
+    function applyAllFilters() {
+        const tbody = table.querySelector('tbody');
+        const rows = tbody ? tbody.querySelectorAll('tr') : [];
+        const activeFilters = [];
+        
+        // Collect all active filters from this tab only
+        filterSelects.forEach(select => {
+            const columnIndex = parseInt(select.getAttribute('data-column'));
+            const filterValue = select.value.trim();
+            if (filterValue !== "") {
+                activeFilters.push({ columnIndex, filterValue });
+            }
+        });
+        
+        let visibleCount = 0;
+        
+        rows.forEach(row => {
+            let matchesAll = true;
             
-            if (!table) return;
-            
-            const rows = table.querySelectorAll('tbody tr');
-            
-            rows.forEach(row => {
-                const cell = row.cells[columnIndex];
+            // Check if row matches all active filters
+            activeFilters.forEach(filter => {
+                const cell = row.cells[filter.columnIndex];
                 if (cell) {
-                    const cellValue = cell.textContent.toLowerCase();
-                    const matches = filterValue === "" || cellValue.includes(filterValue);
-                    row.style.display = matches ? '' : 'none';
+                    const cellValue = cell.textContent.trim();
+                    if (cellValue !== filter.filterValue) {
+                        matchesAll = false;
+                    }
+                } else {
+                    matchesAll = false;
                 }
             });
             
+            // Show/hide row based on filter match
+            if (activeFilters.length === 0 || matchesAll) {
+                row.style.display = '';
+                visibleCount++;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+        
+        console.log(`Table ${tableId}: ${visibleCount} rows visible with ${activeFilters.length} active filters`);
+        return visibleCount;
+    }
+    
+    // Add event listener to all filter dropdowns in this tab
+    filterSelects.forEach(select => {
+        select.addEventListener('change', function() {
+            console.log(`Filter changed in ${tabId}: column ${this.getAttribute('data-column')}, value: "${this.value}"`);
+            const visibleCount = applyAllFilters();
+            
             // Update pagination after filtering
-            updatePaginationAfterFilter(table.id);
+            updatePaginationAfterFilter(tableId);
         });
     });
+    
+    // Apply initial filters if any are set
+    applyAllFilters();
+    
+    console.log(`Filtering initialized for ${tableId}`);
 }
 
 function updatePaginationAfterFilter(tableId) {
     const table = document.getElementById(tableId);
-    if (!table) return;
-    
-    const rows = table.querySelectorAll('tbody tr');
-    const visibleRows = Array.from(rows).filter(row => row.style.display !== 'none');
-    
-    // If pagination is enabled, update it
-    if (typeof setupPagination === 'function') {
-        // You might need to adjust this based on your pagination implementation
-        setupPagination(tableId, 50);
+    if (!table) {
+        console.log(`Table ${tableId} not found for pagination update`);
+        return;
     }
     
-    console.log(`Filter applied: ${visibleRows.length} rows visible`);
+    // Get all rows from tbody, but only count visible ones
+    const tbody = table.querySelector('tbody');
+    if (!tbody) return;
+    
+    const allRows = tbody.querySelectorAll('tr');
+    const visibleRows = Array.from(allRows).filter(row => 
+        row.style.display !== 'none'
+    );
+    
+    console.log(`Pagination update for ${tableId}: ${visibleRows.length} visible rows out of ${allRows.length} total`);
+    
+    // Find the pagination controls
+    const section = table.closest('.section') || table.parentElement;
+    const paginationControls = section.querySelector('.pagination-controls');
+    
+    if (paginationControls) {
+        // Update pagination to work with filtered results
+        updatePaginationForFilteredRows(tableId, visibleRows);
+    }
 }
 
+function updatePaginationForFilteredRows(tableId, visibleRows) {
+    const pageSize = 50;
+    const pageCount = Math.ceil(visibleRows.length / pageSize);
+    let currentPage = 1;
+    
+    const table = document.getElementById(tableId);
+    const section = table.closest('.section') || table.parentElement;
+    const paginationControls = section.querySelector('.pagination-controls');
+    
+    if (!paginationControls) return;
+    
+    const prevButton = paginationControls.querySelector('.prev-page');
+    const nextButton = paginationControls.querySelector('.next-page');
+    const pageInfo = paginationControls.querySelector('.page-info');
+    
+    function showFilteredPage(page) {
+        currentPage = page;
+        const start = (page - 1) * pageSize;
+        const end = start + pageSize;
+        
+        // Hide all rows first
+        const tbody = table.querySelector('tbody');
+        if (tbody) {
+            const allRows = tbody.querySelectorAll('tr');
+            allRows.forEach(row => {
+                if (row.style.display !== 'none') {
+                    row.style.display = 'none';
+                    row.setAttribute('data-hidden-by-pagination', 'true');
+                }
+            });
+        }
+        
+        // Show only the rows for current page
+        visibleRows.forEach((row, index) => {
+            if (index >= start && index < end) {
+                row.style.display = '';
+                row.removeAttribute('data-hidden-by-pagination');
+            }
+        });
+        
+        pageInfo.textContent = `Page ${page} of ${pageCount} (${visibleRows.length} filtered results)`;
+        
+        prevButton.disabled = currentPage === 1;
+        nextButton.disabled = currentPage === pageCount || pageCount === 0;
+    }
+    
+    // Remove old event listeners and add new ones
+    const newPrevButton = prevButton.cloneNode(true);
+    const newNextButton = nextButton.cloneNode(true);
+    prevButton.parentNode.replaceChild(newPrevButton, prevButton);
+    nextButton.parentNode.replaceChild(newNextButton, nextButton);
+    
+    newPrevButton.addEventListener('click', () => {
+        if (currentPage > 1) showFilteredPage(currentPage - 1);
+    });
+    
+    newNextButton.addEventListener('click', () => {
+        if (currentPage < pageCount) showFilteredPage(currentPage + 1);
+    });
+    
+    showFilteredPage(1);
+}
+
+function debugFiltering() {
+    console.log('=== DEBUG FILTERING ===');
+    
+    // Check if filter elements exist with more detail
+    const weTab = document.getElementById('we-tab');
+    const othersTab = document.getElementById('others-tab');
+    
+    if (weTab) {
+        const weFilters = weTab.querySelectorAll('.filter-select');
+        console.log(`WE tab filters found: ${weFilters.length}`);
+        
+        weFilters.forEach((filter, index) => {
+            console.log(`WE Filter ${index}: column=${filter.getAttribute('data-column')}, options=${filter.children.length}`);
+        });
+    }
+    
+    if (othersTab) {
+        const othersFilters = othersTab.querySelectorAll('.filter-select');
+        console.log(`Others tab filters found: ${othersFilters.length}`);
+        
+        othersFilters.forEach((filter, index) => {
+            console.log(`Others Filter ${index}: column=${filter.getAttribute('data-column')}, options=${filter.children.length}`);
+        });
+    }
+    
+    // Check table rows
+    const weTable = document.getElementById('we-table');
+    const othersTable = document.getElementById('others-table');
+    
+    if (weTable) {
+        const weRows = weTable.querySelectorAll('tbody tr');
+        console.log(`WE table rows: ${weRows.length}`);
+        
+        // Check first few rows to verify data structure
+        if (weRows.length > 0) {
+            const firstRow = weRows[0];
+            const cells = firstRow.querySelectorAll('td');
+            console.log(`First WE row has ${cells.length} cells`);
+            cells.forEach((cell, index) => {
+                console.log(`WE Cell ${index}: ${cell.textContent.trim().substring(0, 50)}...`);
+            });
+        }
+    }
+    
+    if (othersTable) {
+        const othersRows = othersTable.querySelectorAll('tbody tr');
+        console.log(`Others table rows: ${othersRows.length}`);
+    }
+    
+    // Test filter functionality
+    console.log('Testing filter change events...');
+    const testFilter = document.querySelector('.filter-select');
+    if (testFilter) {
+        console.log('Dispatching test change event...');
+        testFilter.dispatchEvent(new Event('change'));
+    }
+    
+    console.log('=== END DEBUG ===');
+}
+
+function testFiltering() {
+    console.log('=== TESTING FILTERING ===');
+    
+    // Test WE table filtering
+    const weFilter = document.querySelector('#we-tab .filter-select');
+    if (weFilter) {
+        console.log('Testing WE filter...');
+        
+        // Get the first non-empty option value
+        for (let i = 1; i < weFilter.options.length; i++) {
+            if (weFilter.options[i].value) {
+                const testValue = weFilter.options[i].value;
+                console.log(`Setting WE filter to: ${testValue}`);
+                weFilter.value = testValue;
+                weFilter.dispatchEvent(new Event('change'));
+                break;
+            }
+        }
+    }
+    
+    setTimeout(() => {
+        // Test Others table filtering
+        const othersFilter = document.querySelector('#others-tab .filter-select');
+        if (othersFilter) {
+            console.log('Testing Others filter...');
+            
+            // Get the first non-empty option value
+            for (let i = 1; i < othersFilter.options.length; i++) {
+                if (othersFilter.options[i].value) {
+                    const testValue = othersFilter.options[i].value;
+                    console.log(`Setting Others filter to: ${testValue}`);
+                    othersFilter.value = testValue;
+                    othersFilter.dispatchEvent(new Event('change'));
+                    break;
+                }
+            }
+        }
+    }, 1000);
+}
 
 function initializePagination(tableId, pageSize = 50) {
     const table = document.getElementById(tableId);
