@@ -71,11 +71,12 @@ function setupTabs() {
     });
 }
 
+
 function initializeFiltering() {
-    const filterInputs = document.querySelectorAll('.filter-input');
+    const filterSelects = document.querySelectorAll('.filter-select');
     
-    filterInputs.forEach(input => {
-        input.addEventListener('input', function() {
+    filterSelects.forEach(select => {
+        select.addEventListener('change', function() {
             const columnIndex = parseInt(this.getAttribute('data-column'));
             const filterValue = this.value.toLowerCase();
             const table = this.closest('.section').querySelector('.data-table');
@@ -88,13 +89,33 @@ function initializeFiltering() {
                 const cell = row.cells[columnIndex];
                 if (cell) {
                     const cellValue = cell.textContent.toLowerCase();
-                    const matches = cellValue.includes(filterValue);
+                    const matches = filterValue === "" || cellValue.includes(filterValue);
                     row.style.display = matches ? '' : 'none';
                 }
             });
+            
+            // Update pagination after filtering
+            updatePaginationAfterFilter(table.id);
         });
     });
 }
+
+function updatePaginationAfterFilter(tableId) {
+    const table = document.getElementById(tableId);
+    if (!table) return;
+    
+    const rows = table.querySelectorAll('tbody tr');
+    const visibleRows = Array.from(rows).filter(row => row.style.display !== 'none');
+    
+    // If pagination is enabled, update it
+    if (typeof setupPagination === 'function') {
+        // You might need to adjust this based on your pagination implementation
+        setupPagination(tableId, 50);
+    }
+    
+    console.log(`Filter applied: ${visibleRows.length} rows visible`);
+}
+
 
 function initializePagination(tableId, pageSize = 50) {
     const table = document.getElementById(tableId);

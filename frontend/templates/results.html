@@ -243,12 +243,52 @@
                     </div>
                     
                     {% if we_data is defined and not we_data.empty %}
+                    <!-- Replace the existing WE Data filter controls -->
                     <div class="filter-controls">
-                        <input type="text" placeholder="Filter MSANCODE" class="filter-input" data-column="0">
-                        <input type="text" placeholder="Filter EDGE" class="filter-input" data-column="1">
-                        <input type="text" placeholder="Filter Distribution" class="filter-input" data-column="2">
-                        <input type="text" placeholder="Filter BNG" class="filter-input" data-column="3">
-                        <input type="text" placeholder="Filter Impact" class="filter-input" data-column="6">
+                        <select class="filter-select" data-column="0">
+                            <option value="">All MSANCODE</option>
+                            {% if we_data is defined and not we_data.empty %}
+                                {% for value in we_data.MSANCODE.unique() %}
+                                    <option value="{{ value }}">{{ value }}</option>
+                                {% endfor %}
+                            {% endif %}
+                        </select>
+                        
+                        <select class="filter-select" data-column="1">
+                            <option value="">All EDGE</option>
+                            {% if we_data is defined and not we_data.empty %}
+                                {% for value in we_data.EDGE.unique() %}
+                                    <option value="{{ value }}">{{ value }}</option>
+                                {% endfor %}
+                            {% endif %}
+                        </select>
+                        
+                        <select class="filter-select" data-column="2">
+                            <option value="">All Distribution</option>
+                            {% if we_data is defined and not we_data.empty %}
+                                {% for value in we_data.distribution_hostname.unique() %}
+                                    <option value="{{ value }}">{{ value }}</option>
+                                {% endfor %}
+                            {% endif %}
+                        </select>
+                        
+                        <select class="filter-select" data-column="3">
+                            <option value="">All BNG</option>
+                            {% if we_data is defined and not we_data.empty %}
+                                {% for value in we_data.BNG_HOSTNAME.unique() %}
+                                    <option value="{{ value }}">{{ value }}</option>
+                                {% endfor %}
+                            {% endif %}
+                        </select>
+                        
+                        <select class="filter-select" data-column="6">
+                            <option value="">All Impact</option>
+                            {% if we_data is defined and not we_data.empty %}
+                                {% for value in we_data.Impact.unique() %}
+                                    <option value="{{ value }}">{{ value }}</option>
+                                {% endfor %}
+                            {% endif %}
+                        </select>
                     </div>
                     
                     <div class="table-container">
@@ -317,13 +357,44 @@
                     </div>
                     
                     {% if others_data is defined and not others_data.empty %}
+                    <!-- Replace the existing Others Data filter controls -->
                     <div class="filter-controls">
-                        <input type="text" placeholder="Filter MSANCODE" class="filter-input" data-column="0">
-                        <input type="text" placeholder="Filter EDGE" class="filter-input" data-column="1">
-                        <input type="text" placeholder="Filter Bitstream" class="filter-input" data-column="2">
-                        <input type="text" placeholder="Filter Impact" class="filter-input" data-column="5">
+                        <select class="filter-select" data-column="0">
+                            <option value="">All MSANCODE</option>
+                            {% if others_data is defined and not others_data.empty %}
+                                {% for value in others_data.MSANCODE.unique() %}
+                                    <option value="{{ value }}">{{ value }}</option>
+                                {% endfor %}
+                            {% endif %}
+                        </select>
+                        
+                        <select class="filter-select" data-column="1">
+                            <option value="">All EDGE</option>
+                            {% if others_data is defined and not others_data.empty %}
+                                {% for value in others_data.EDGE.unique() %}
+                                    <option value="{{ value }}">{{ value }}</option>
+                                {% endfor %}
+                            {% endif %}
+                        </select>
+                        
+                        <select class="filter-select" data-column="2">
+                            <option value="">All Bitstream</option>
+                            {% if others_data is defined and not others_data.empty %}
+                                {% for value in others_data.BITSTREAM_HOSTNAME.unique() %}
+                                    <option value="{{ value }}">{{ value }}</option>
+                                {% endfor %}
+                            {% endif %}
+                        </select>
+                        
+                        <select class="filter-select" data-column="5">
+                            <option value="">All Impact</option>
+                            {% if others_data is defined and not others_data.empty %}
+                                {% for value in others_data.Impact.unique() %}
+                                    <option value="{{ value }}">{{ value }}</option>
+                                {% endfor %}
+                            {% endif %}
+                        </select>
                     </div>
-                    
                     <div class="table-container">
                         <table id="others-table" class="data-table">
                             <thead>
