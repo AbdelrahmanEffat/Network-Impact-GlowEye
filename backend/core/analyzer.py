@@ -430,6 +430,40 @@ class UnifiedNetworkImpactAnalyzer:
         results.to_csv(filename, index=False)
         print(f"Results exported to {filename}")
 
+    # Add this method to the UnifiedNetworkImpactAnalyzer class in analyzer.py
+    def _calculate_route_status(self, path1, path2):
+        """
+        Calculate Route_Status by comparing final destinations of two paths
+        Returns: 'Primary Path Active' or 'Traffic Rerouted'
+        """
+        def extract_final_destination(path):
+            if isinstance(path, list) and len(path) > 0:
+                return path[-1]  # Last element of the list
+            elif isinstance(path, str):
+                # Handle error messages - treat entire message as destination
+                if "NetworkXNoPath" in path or "Error" in path or "NodeNotFound" in path:
+                    return path
+                # Try to parse string representation of list
+                try:
+                    import ast
+                    parsed = ast.literal_eval(path)
+                    if isinstance(parsed, list) and len(parsed) > 0:
+                        return parsed[-1]
+                except:
+                    pass
+                return path  # Return original string if parsing fails
+            else:
+                return str(path) if path is not None else "Unknown"
+        
+        final1 = extract_final_destination(path1)
+        final2 = extract_final_destination(path2)
+        
+        # Compare the final destinations
+        if final1 == final2:
+            return 'Primary Path Active'
+        else:
+            return 'Traffic Rerouted'
+
 
 class UnifiedCIRModel:
     """Unified CIR Model that handles both network and bitstream scenarios"""

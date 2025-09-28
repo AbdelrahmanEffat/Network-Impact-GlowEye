@@ -305,6 +305,7 @@
                                     <th>Data-Customer Count</th>
                                     <th>Impact</th>
                                     <th>cir_type</th>
+                                    <th>Route_Status</th>
                                     <th>Physical Path</th>
                                     <th>Backup Physical Path</th>
                                 </tr>
@@ -322,6 +323,9 @@
                                     <td>{{ record.TOTAL_DATA_CUST }}</td>
                                     <td>{{ record.Impact }}</td>
                                     <td>{{ record.cir_type }}</td>
+                                    <td class="route-status-{{ record.Route_Status.lower().replace(' ', '-') if record.Route_Status else 'unknown' }}">
+                                        {{ record.Route_Status }}
+                                    </td>
                                     <td>{{ record.Path }}</td>
                                     <td>{{ record.Path2 }}</td>
                                 </tr>
@@ -405,6 +409,7 @@
                                     <th>Service</th>
                                     <th>ISP</th>
                                     <th>Impact</th>
+                                    <th>Route_Status</th>
                                     <th>Physical Path</th>
                                     <th>Backup Physical Path</th>
                                 </tr>
@@ -418,6 +423,9 @@
                                     <td>{{ record.SERVICE }}</td>
                                     <td>{{ record.ISP }}</td>
                                     <td>{{ record.Impact }}</td>
+                                    <td class="route-status-{{ record.Route_Status.lower().replace(' ', '-') if record.Route_Status else 'unknown' }}">
+                                        {{ record.Route_Status }}
+                                    </td>
                                     <td>{{ record.Path }}</td>
                                     <td>{{ record.Path2 }}</td>
                                 </tr>

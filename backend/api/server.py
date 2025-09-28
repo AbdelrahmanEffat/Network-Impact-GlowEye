@@ -271,8 +271,17 @@ async def analyze_network_impact_detailed(request: AnalysisRequest):
             we_results = we_analyzer.analyze_node_impact(request.identifier)
             others_results = others_analyzer.analyze_node_impact(request.identifier)
 
+        # Add Route_Status column to both results
+        we_results['Route_Status'] = we_results.apply(
+            lambda row: we_analyzer._calculate_route_status(row['Path'], row['Path2']),  # FIXED METHOD NAME
+            axis=1
+        )
+        others_results['Route_Status'] = others_results.apply(
+            lambda row: others_analyzer._calculate_route_status(row['Path'], row['Path2']),  # FIXED METHOD NAME
+            axis=1
+        )
+
         # Convert NaN values to None (which becomes null in JSON)
-        # Use a more robust method to handle all NaN cases
         def replace_nan_with_none(obj):
             if isinstance(obj, dict):
                 return {k: replace_nan_with_none(v) for k, v in obj.items()}
@@ -298,6 +307,7 @@ async def analyze_network_impact_detailed(request: AnalysisRequest):
     except Exception as e:
         logger.error(f"Detailed analysis failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Detailed analysis failed: {str(e)}")
+
 
 def _get_results_preview(results_df, num_records=5):
     """Get preview of results with key columns"""

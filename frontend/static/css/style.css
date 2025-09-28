@@ -406,3 +406,22 @@ body {
         min-width: auto;
     }
 }
+
+/* Route_Status styling */
+.route-status-primary-path-active {
+    background-color: #d4edda;
+    color: #155724;
+    font-weight: bold;
+}
+
+.route-status-traffic-rerouted {
+    background-color: #fff3cd;
+    color: #856404;
+    font-weight: bold;
+}
+
+.route-status-unknown {
+    background-color: #f8d7da;
+    color: #721c24;
+    font-weight: bold;
+}
