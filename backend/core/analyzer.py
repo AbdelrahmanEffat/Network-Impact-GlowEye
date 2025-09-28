@@ -176,12 +176,12 @@ class UnifiedNetworkImpactAnalyzer:
             self.final_df.MSANCODE.isin(direct_impact.MSANCODE.unique())
         ].copy()
         
-        # Get affected target nodes
-        affected_nodes = direct_impact[target_hostname_col].unique().tolist()
+        # Get ALL nodes in the affected exchange, not just target nodes
+        affected_nodes = self._get_exchange_nodes(dwn_exchange)
         
         # Calculate alternative paths only for network type (Others don't need this)
         if self.data_type == 'network':
-            # Create graph excluding affected nodes
+            # Create graph excluding ALL nodes from the affected exchange
             graph = self.model.draw_graph(excluded_nodes=affected_nodes)
             
             # Calculate alternative paths
@@ -278,7 +278,7 @@ class UnifiedNetworkImpactAnalyzer:
         if affected_msans.empty:
             return pd.DataFrame()
         
-        # Calculate alternative paths
+        # Calculate alternative paths excluding the specific node
         graph = self.model.draw_graph(excluded_nodes=[dwn_node])
         target_hostname_col = self.column_map['target_hostname']
         
@@ -294,7 +294,7 @@ class UnifiedNetworkImpactAnalyzer:
         return affected_msans
     
     def _get_exchange_nodes(self, dwn_exchange):
-        """Get all nodes belonging to a specific exchange"""
+        """Get all nodes belonging to a specific exchange - enhanced version"""
         # Extract exchange code from exchange name
         exchange_code = dwn_exchange.split('.')[-1] if '.' in dwn_exchange else dwn_exchange
         
@@ -302,7 +302,7 @@ class UnifiedNetworkImpactAnalyzer:
         target_exchange_col = self.column_map['target_exchange']
         target_hostname_col = self.column_map['target_hostname']
         
-        # Find all nodes in the exchange from direct impacts
+        # Find all nodes in the exchange from various sources
         edge_nodes = self.final_df[
             self.final_df[edge_exchange_col] == dwn_exchange
         ]['EDGE'].unique().tolist()
@@ -311,13 +311,35 @@ class UnifiedNetworkImpactAnalyzer:
             self.final_df[target_exchange_col] == dwn_exchange
         ][target_hostname_col].unique().tolist()
         
-        # Combine and filter nodes belonging to the exchange
-        all_nodes = list(set(edge_nodes + target_nodes))
+        # Also check WAN data for nodes in this exchange
+        wan_nodes_in_exchange = []
+        if hasattr(self, 'df_wan') and self.df_wan is not None:
+            # Look for nodes that have the exchange code in their name
+            wan_nodes_in_exchange = self.df_wan[
+                self.df_wan['NODENAME'].str.contains(exchange_code, na=False)
+            ]['NODENAME'].unique().tolist()
+            
+            wan_neighbors_in_exchange = self.df_wan[
+                self.df_wan['NEIGHBOR_HOSTNAME'].str.contains(exchange_code, na=False)
+            ]['NEIGHBOR_HOSTNAME'].unique().tolist()
+            
+            wan_nodes_in_exchange.extend(wan_neighbors_in_exchange)
+        
+        # Combine and deduplicate all nodes
+        all_nodes = list(set(edge_nodes + target_nodes + wan_nodes_in_exchange))
+        
+        # Filter nodes that actually belong to the exchange based on naming convention
         exchange_nodes = [
             node for node in all_nodes 
-            if len(node.split('-')) > 2 and node.split('-')[2] == exchange_code
+            if node and (
+                # Check if node follows the naming convention and contains exchange code
+                (len(node.split('-')) > 2 and node.split('-')[2] == exchange_code) or
+                # Or if the node name contains the exchange code
+                exchange_code in node
+            )
         ]
         
+        print(f"Found {len(exchange_nodes)} nodes in exchange {dwn_exchange}: {exchange_nodes}")
         return exchange_nodes
     
     def _find_msans_with_nodes_in_path(self, affected_nodes):
