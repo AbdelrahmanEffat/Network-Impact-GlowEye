@@ -845,6 +845,9 @@
         
         // Initialize charts
         initializeCharts();
+
+        // Initialize searchable dropdowns enhanced version for better performance:
+        addSearchToDropdownsEnhanced();
         
         // Initialize dashboard if data is available
         if (typeof NetworkDashboard !== 'undefined' && weData && weData.length > 0) {
@@ -868,6 +871,218 @@
         // Initialize ISP tabs functionality
         initializeIspTabs();
     });
+
+
+    // Enhanced version with debouncing for better performance
+    function addSearchToDropdownsEnhanced() {
+        console.log('Adding enhanced search to MSAN dropdowns...');
+        
+        const weMsanSelect = document.querySelector('#we-tab select[data-column="0"]');
+        const othersMsanSelect = document.querySelector('#others-tab select[data-column="0"]');
+        
+        if (weMsanSelect) {
+            addSearchToSelectEnhanced(weMsanSelect, 'Search MSANCODE...');
+            // Ensure the original filtering is set up for this select
+            setupSelectFiltering(weMsanSelect);
+        }
+        
+        if (othersMsanSelect) {
+            addSearchToSelectEnhanced(othersMsanSelect, 'Search MSANCODE...');
+            // Ensure the original filtering is set up for this select
+            setupSelectFiltering(othersMsanSelect);
+        }
+    }
+
+    function addSearchToSelectEnhanced(selectElement, placeholder) {
+        const searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.placeholder = placeholder;
+        searchInput.style.cssText = `
+            width: 100%;
+            margin-bottom: 8px;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        `;
+        
+        // Focus styles
+        searchInput.addEventListener('focus', function() {
+            this.style.borderColor = '#2196F3';
+            this.style.boxShadow = '0 0 5px rgba(33, 150, 243, 0.3)';
+            this.style.outline = 'none';
+        });
+        
+        searchInput.addEventListener('blur', function() {
+            this.style.borderColor = '#ddd';
+            this.style.boxShadow = 'none';
+        });
+        
+        const originalOptions = Array.from(selectElement.options);
+        let timeoutId;
+        
+        // Debounced search for better performance with large datasets
+        searchInput.addEventListener('input', function() {
+            clearTimeout(timeoutId);
+            timeoutId = setTimeout(() => {
+                const searchTerm = this.value.toLowerCase().trim();
+                filterSelectOptions(selectElement, originalOptions, searchTerm);
+            }, 150); // 150ms delay
+        });
+        
+        // Also allow immediate search on Enter key
+        searchInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                clearTimeout(timeoutId);
+                const searchTerm = this.value.toLowerCase().trim();
+                filterSelectOptions(selectElement, originalOptions, searchTerm);
+            }
+        });
+        
+        selectElement.parentNode.insertBefore(searchInput, selectElement);
+        
+        // Maintain select styling
+        selectElement.style.cssText = `
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            background-color: white;
+            box-sizing: border-box;
+            max-height: 200px;
+        `;
+    }
+
+    function filterSelectOptions(selectElement, originalOptions, searchTerm) {
+        // Clear current options (keep the first "All" option)
+        while (selectElement.options.length > 1) {
+            selectElement.remove(1);
+        }
+        
+        if (searchTerm === '') {
+            // Restore all options
+            originalOptions.forEach(option => {
+                if (option.value !== '') {
+                    selectElement.appendChild(option.cloneNode(true));
+                }
+            });
+        } else {
+            // Filter options
+            originalOptions.forEach(option => {
+                if (option.value !== '' && 
+                    option.text.toLowerCase().includes(searchTerm)) {
+                    selectElement.appendChild(option.cloneNode(true));
+                }
+            });
+        }
+        
+        selectElement.selectedIndex = 0;
+    }
+
+    function setupSelectFiltering(selectElement) {
+        // Add change event listener to trigger table filtering
+        selectElement.addEventListener('change', function() {
+            filterTableBySelect(this);
+        });
+    }
+
+    function filterTableBySelect(selectElement) {
+        const columnIndex = parseInt(selectElement.getAttribute('data-column'));
+        const filterValue = selectElement.value;
+        
+        // Find the parent tab content and table
+        const tabContent = selectElement.closest('.tab-content');
+        if (!tabContent) {
+            console.error('Tab content not found for select element');
+            return;
+        }
+        
+        const table = tabContent.querySelector('.data-table');
+        if (!table) {
+            console.error('Table not found in tab content');
+            return;
+        }
+        
+        const tbody = table.querySelector('tbody');
+        if (!tbody) {
+            console.error('Table body not found');
+            return;
+        }
+        
+        const rows = tbody.querySelectorAll('tr');
+        let visibleCount = 0;
+        
+        // Get all active filters in this tab
+        const allFilters = tabContent.querySelectorAll('.filter-select');
+        const activeFilters = Array.from(allFilters).filter(select => select.value !== '');
+        
+        rows.forEach(row => {
+            let shouldShow = true;
+            
+            // Check if row matches all active filters
+            activeFilters.forEach(filter => {
+                const filterColumn = parseInt(filter.getAttribute('data-column'));
+                const filterValue = filter.value.toLowerCase();
+                const cell = row.cells[filterColumn];
+                
+                if (cell) {
+                    const cellText = cell.textContent || cell.innerText || '';
+                    if (!cellText.toLowerCase().includes(filterValue)) {
+                        shouldShow = false;
+                    }
+                } else {
+                    shouldShow = false;
+                }
+            });
+            
+            // Apply visibility
+            row.style.display = shouldShow ? '' : 'none';
+            if (shouldShow) visibleCount++;
+        });
+        
+        console.log(`Filtered table: ${visibleCount} visible rows out of ${rows.length}`);
+        
+        // Update pagination if it exists
+        updatePaginationAfterFilter(table.id, visibleCount);
+    }
+
+    function updatePaginationAfterFilter(tableId, visibleCount) {
+        // If you have pagination, update it here
+        // This is a placeholder for pagination update logic
+        console.log(`Table ${tableId} now has ${visibleCount} visible rows`);
+    }
+
+    // Initialize all table filtering
+    function initializeTableFiltering() {
+        console.log('Initializing table filtering...');
+        
+        // Set up filtering for all existing select elements
+        document.querySelectorAll('.filter-select').forEach(select => {
+            setupSelectFiltering(select);
+        });
+    }
+
+    // Enhanced version that works with your existing setup
+    function initializeEnhancedFiltering() {
+        console.log('Initializing enhanced filtering...');
+        
+        // First, add search to MSAN dropdowns
+        addSearchToDropdownsEnhanced();
+        
+        // Then initialize table filtering for ALL filter selects
+        initializeTableFiltering();
+        
+        // Also set up the other filter selects (non-MSAN) if they're not already set up
+        document.querySelectorAll('.filter-select:not([data-column="0"])').forEach(select => {
+            if (!select.hasAttribute('data-filter-initialized')) {
+                setupSelectFiltering(select);
+                select.setAttribute('data-filter-initialized', 'true');
+            }
+        });
+    }
+
 
     function initializeCharts() {
         console.log('Initializing charts...');
