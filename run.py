@@ -16,7 +16,7 @@ if __name__ == "__main__":
     )
     
     # Wait a moment for API server to start
-    time.sleep(70)
+    time.sleep(13)
     
     # Start web server
     web_process = run_command(

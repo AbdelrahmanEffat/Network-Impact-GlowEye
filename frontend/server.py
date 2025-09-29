@@ -36,16 +36,17 @@ async def home(request: Request):
     """Home page with analysis form"""
     return templates.TemplateResponse("index.html", {"request": request})
 
+
 @app.post("/analyze", response_class=HTMLResponse)
 async def analyze_network_impact(
     request: Request,
     identifier: str = Form(...),
     identifier_type: str = Form("auto")
-        ):
-    """Analyze network impact and display results"""
+):
+    """Analyze network impact with single API call"""
     try:
-        # Call the analysis API
-        api_url = f"{API_BASE_URL}/analyze"
+        # Single API call to get complete results
+        api_url = f"{API_BASE_URL}/analyze/complete"
         response = requests.post(
             api_url,
             json={"identifier": identifier, "identifier_type": identifier_type}
@@ -58,96 +59,25 @@ async def analyze_network_impact(
                 {"request": request, "error": error_msg}
             )
         
-        # Parse the API response
+        # Parse the complete response
         result = response.json()
         
-        # Get detailed data for both WE and Others
-        we_data = await get_detailed_data(identifier, identifier_type, "we")
-        others_data = await get_detailed_data(identifier, identifier_type, "others")
+        # Convert data back to DataFrames for template
+        we_data = pd.DataFrame(result['data']['we_results']) if result['data']['we_results'] else pd.DataFrame()
+        others_data = pd.DataFrame(result['data']['others_results']) if result['data']['others_results'] else pd.DataFrame()
+        others_dash = pd.DataFrame(result['data']['others_dash']) if result['data']['others_dash'] else pd.DataFrame()
         
-        # In the analyze_network_impact function, after getting we_data and others_data
-        # Add code to calculate the statistics
-
-        # Calculate WE statistics
-        we_stats = {}
-        if we_data is not None and not we_data.empty:
-            we_unique = we_data.drop_duplicates(subset=['MSANCODE'])
-            isolated_we = we_unique[we_unique['Impact'] == 'Isolated']
-            partial_we = we_unique[we_unique['Impact'] == 'Partially Impacted']
-            
-            we_stats = {
-                'isolated_msans': len(isolated_we),
-                'partial_msans': len(partial_we),
-                'isolated_sub': isolated_we['CUST'].sum() if not isolated_we.empty else 0,
-                'partial_sub': partial_we['CUST'].sum() if not partial_we.empty else 0,
-                'isolated_sub_voice': isolated_we['TOTAL_VOICE_CUST'].sum() if not isolated_we.empty else 0,
-                'isolated_sub_data': isolated_we['TOTAL_DATA_CUST'].sum() if not isolated_we.empty else 0,
-                'partial_sub_voice': partial_we['TOTAL_VOICE_CUST'].sum() if not partial_we.empty else 0,
-                'partial_sub_data': partial_we['TOTAL_DATA_CUST'].sum() if not partial_we.empty else 0,
-
-                 'partial_vic':(partial_we['VIC'] == 'VIC').sum() if not partial_we.empty else 0,
-                 'iso_vic':(isolated_we['VIC']=='VIC').sum() if not isolated_we.empty else 0
-            }
-
-        # Calculate Others statistics
-        others_stats = {}
-        if others_data is not None and not others_data.empty:
-            others_unique = others_data.drop_duplicates(subset=['MSANCODE'])
-            isolated_others = others_unique[others_unique['Impact'] == 'Isolated']
-            partial_others = others_unique[others_unique['Impact'] == 'Partially Impacted']
-            print(isolated_others['VODA_WORNG_VLAN'].sum())
-            others_stats = {
-                'isolated_msans': len(isolated_others),
-                'partial_msans': len(partial_others),
-                'o_partial_vic':(partial_others['VIC'] == 'VIC').sum() if not partial_others.empty else 0,
-                'o_iso_vic':(isolated_others['VIC']=='VIC').sum() if not isolated_others.empty else 0,
-                'isolated_sub': isolated_others['TOTAL_OTHER_CUST'].sum() if not isolated_others.empty else 0,
-                'partial_sub': partial_others['TOTAL_OTHER_CUST'].sum() if not partial_others.empty else 0,
-                'isolated_voda': isolated_others['VODA_CUST'].sum() if not isolated_others.empty else 0,
-                'isolated_voda_ubb': isolated_others['VODA_UBBT_CUST'].sum() if not isolated_others.empty else 0,
-                'isolated_voda_hs': isolated_others['VODA_HS_CUST'].sum() if not isolated_others.empty else 0,
-                'isolated_voda_ubb_ftth': isolated_others['VODA_UBBT_FTTH_CUST'].sum() if not isolated_others.empty else 0,
-                'isolated_voda_hs_ftth': isolated_others['VODA_HS_FTTH_CUST'].sum() if not isolated_others.empty else 0,
-                'isolated_orange': isolated_others['ORANGE_CUST'].sum() if not isolated_others.empty else 0,
-                'isolated_orange_ubb': isolated_others['ORANGE_UBBT_CUST'].sum() if not isolated_others.empty else 0,
-                'isolated_orange_hs': isolated_others['ORANGE_HS_CUST'].sum() if not isolated_others.empty else 0,
-                'isolated_orange_ubb_ftth': isolated_others['ORANGE_UBBT_FTTH_CUST'].sum() if not isolated_others.empty else 0,
-                'isolated_orange_hs_ftth': isolated_others['ORANGE_HS_FTTH_CUST'].sum() if not isolated_others.empty else 0,
-                'isolated_etisalat': isolated_others['ETISLAT_CUST'].sum() if not isolated_others.empty else 0,
-                'isolated_etisalat_ubb': isolated_others['ETISLAT_UBBT_CUST'].sum() if not isolated_others.empty else 0,
-                'isolated_etisalat_hs': isolated_others['ETISLAT_HS_CUST'].sum() if not isolated_others.empty else 0,
-                'isolated_etisalat_ubb_ftth': isolated_others['ETISLAT_UBBT_FTTH_CUST'].sum() if not isolated_others.empty else 0,
-                'isolated_etisalat_hs_ftth': isolated_others['ETISLAT_HS_FTTH_CUST'].sum() if not isolated_others.empty else 0,
-                'isolated_noor': isolated_others['NOOR_CUST'].sum() if not isolated_others.empty else 0,
-                'isolated_noor_ubb': isolated_others['NOOR_UBBT_CUST'].sum() if not isolated_others.empty else 0,
-                'isolated_noor_hs': isolated_others['NOOR_HS_CUST'].sum() if not isolated_others.empty else 0,
-                'isolated_noor_ubb_ftth': isolated_others['NOOR_UBBT_FTTH_CUST'].sum() if not isolated_others.empty else 0,
-                'isolated_noor_hs_ftth': isolated_others['NOOR_HS_FTTH_CUST'].sum() if not isolated_others.empty else 0,
-                'wrong_noor': isolated_others['NOOR_WRONG_VLAN'].sum() if not isolated_others.empty else 0,
-                'wrong_voda': isolated_others['VODA_WORNG_VLAN'].sum() if not isolated_others.empty else 0 ,
-                'wrong_orange': isolated_others['ORANGE_WORNG_VLAN'].sum() if not isolated_others.empty else 0,
-                'wrong_ets': isolated_others['ETISLAT_WRONG_VLAN'].sum() if not isolated_others.empty else 0
-           
-
-           
-            }
-        
-        # Remove Duplicated records for others path, based on ISP
-        others_dash = others_data.drop_duplicates(subset=['MSANCODE', 'EDGE', 'BITSTREAM_HOSTNAME'])
-
-        # Add these to template_data
         template_data = {
             "request": request,
             "identifier": identifier,
             "identifier_type": identifier_type,
-            "result": result,
+            "result": result['summary'],
             "we_data": we_data,
             "others_data": others_data,
             "others_dash": others_dash,
-            "we_stats": we_stats,
-            "others_stats": others_stats,
+            "we_stats": result['statistics']['we_stats'],
+            "others_stats": result['statistics']['others_stats'],
             "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
         }
         
         return templates.TemplateResponse("results.html", template_data)
@@ -159,25 +89,6 @@ async def analyze_network_impact(
             {"request": request, "error": error_msg}
         )
 
-@app.post("/api/analyze")
-
-async def api_analyze_network_impact(identifier: str, identifier_type: str = "auto"):
-    """API endpoint to get analysis results"""
-    try:
-        # Call the analysis API
-        api_url = f"{API_BASE_URL}/analyze"
-        response = requests.post(
-            api_url,
-            json={"identifier": identifier, "identifier_type": identifier_type}
-        )
-        
-        if response.status_code != 200:
-            raise HTTPException(status_code=response.status_code, detail=response.text)
-        
-        return response.json()
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
 @app.get("/download")
 async def download_results(identifier: str, identifier_type: str = "auto"):

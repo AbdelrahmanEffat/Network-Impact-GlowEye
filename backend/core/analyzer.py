@@ -339,7 +339,7 @@ class UnifiedNetworkImpactAnalyzer:
             )
         ]
         
-        print(f"Found {len(exchange_nodes)} nodes in exchange {dwn_exchange}: {exchange_nodes}")
+        print(f"Found {len(exchange_nodes)} nodes in exchange {dwn_exchange}")#: {exchange_nodes}
         return exchange_nodes
     
     def _find_msans_with_nodes_in_path(self, affected_nodes):
@@ -499,38 +499,45 @@ class UnifiedCIRModel:
         self.data_type = data_type
         self.column_map = column_map
         
-        self.g = self.draw_graph()
+        # Precompute base graph once
+        self._base_graph = self._create_base_graph()
         
-    def draw_graph(self, excluded_nodes=None):
-        """Create network graph from stored data, optionally excluding nodes"""
-        if excluded_nodes is None:
-            excluded_nodes = []
-        elif not isinstance(excluded_nodes, list):
-            excluded_nodes = [excluded_nodes]
-            
+    def _create_base_graph(self):
+        """Create the base graph without any exclusions (called once during init)"""
         # Always exclude these nodes
         always_excluded = ['INSOMNA-R02J-C-EG', 'INSOMNA-R01J-C-EG']
-        all_excluded = always_excluded + excluded_nodes
         
-        df_filtered = self.data[~self.data['NODENAME'].isin(all_excluded)]
-        df_filtered = df_filtered[~df_filtered['NEIGHBOR_HOSTNAME'].isin(all_excluded)]
+        df_filtered = self.data[~self.data['NODENAME'].isin(always_excluded)]
+        df_filtered = df_filtered[~df_filtered['NEIGHBOR_HOSTNAME'].isin(always_excluded)]
         df_filtered = df_filtered.drop_duplicates()
 
         G = nx.Graph()
         for idx, row in df_filtered.iterrows():
             G.add_edge(row[0], row[1])
         return G
-
+    
+    def draw_graph(self, excluded_nodes=None):
+        """Create network graph with optional node exclusions"""
+        if excluded_nodes is None or len(excluded_nodes) == 0:
+            return self._base_graph.copy()
+        
+        # Create a copy of the base graph and remove excluded nodes
+        graph_copy = self._base_graph.copy()
+        graph_copy.remove_nodes_from(excluded_nodes)
+        return graph_copy
+    
     def calculate_path(self, graph, source, target):
-        """Calculate path between two nodes"""
+        """Calculate path between two nodes - optimized version"""
+        # Quick check if nodes exist in graph
+        if source not in graph or target not in graph:
+            return f"NodeNotFound: {source} or {target} not in graph"
+        
         try:
             return nx.shortest_path(graph, source=source, target=target)
         except nx.NetworkXNoPath:
-            return f"NetworkXNoPath: No path between {source} and {target}."
-        except nx.NodeNotFound as e:
-            return e
-        except Exception as f:
-            return f"Error: {f}"
+            return f"NetworkXNoPath: No path between {source} and {target}"
+        except Exception as e:
+            return f"Error: {str(e)}"
     
     def generate_results(self):
         """Main method to generate the final results dataframe"""
@@ -545,7 +552,7 @@ class UnifiedCIRModel:
         specific_columns = ['EDGE', 'distribution_hostname']
         
         self.df['Path'] = self.df[specific_columns].apply(
-            lambda row: self.calculate_path(self.g, row['EDGE'], row['distribution_hostname']), axis=1
+            lambda row: self.calculate_path(self._base_graph, row['EDGE'], row['distribution_hostname']), axis=1
         )
 
         # Split data by status
@@ -577,7 +584,7 @@ class UnifiedCIRModel:
         specific_columns = ['EDGE', target_hostname_col]
         
         self.df['Path'] = self.df[specific_columns].apply(
-            lambda row: self.calculate_path(self.g, row['EDGE'], row[target_hostname_col]), axis=1
+            lambda row: self.calculate_path(self._base_graph, row['EDGE'], row[target_hostname_col]), axis=1
         )
         
         res_df = self.df.copy()
@@ -626,25 +633,36 @@ class UnifiedCIRModel:
         return dfx
 
     def _calculate_optimized_paths(self, dfx):
-        """Calculate optimized paths using cached graphs"""
+        """Calculate optimized paths using smarter caching"""
         start_time = time.perf_counter()
         
-        # Precompute all unique graphs
-        unique_hostnames = dfx['distribution_hostname_UP'].unique()
-        graph_cache = {}
+        # Group by distribution_hostname_UP to minimize graph operations
+        hostname_groups = dfx.groupby('distribution_hostname_UP')
         
-        for hostname in unique_hostnames:
-            graph_cache[hostname] = self.draw_graph(excluded_nodes=[hostname])
-
-        # Apply path finding using cached graphs
-        def optimized_path_function(row):
-            graph = graph_cache[row['distribution_hostname_UP']]
-            return self.calculate_path(graph, row['EDGE'], row['distribution_hostname'])
-
-        dfx['Path2'] = dfx.apply(optimized_path_function, axis=1)
+        path_results = []
+        
+        for hostname, group_df in hostname_groups:
+            # Create graph excluding this specific hostname
+            graph = self.draw_graph(excluded_nodes=[hostname])
+            
+            # Calculate paths for all rows in this group using the same graph
+            group_paths = []
+            for _, row in group_df.iterrows():
+                path = self.calculate_path(graph, row['EDGE'], row['distribution_hostname'])
+                group_paths.append(path)
+            
+            # Add paths to results
+            group_df = group_df.copy()
+            group_df['Path2'] = group_paths
+            path_results.append(group_df)
+        
+        # Combine results
+        dfx_optimized = pd.concat(path_results, ignore_index=True)
         
         end_time = time.perf_counter()
         execution_time = end_time - start_time
         print(f"Optimized path calculation time: {execution_time:.3f} seconds")
         
-        return dfx
+        return dfx_optimized
+    
+    
