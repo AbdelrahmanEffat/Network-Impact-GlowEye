@@ -88,6 +88,44 @@ class UnifiedNetworkImpactAnalyzer:
         
         print(f"Data preprocessed. Final shape: {self.df_report.shape}")
     
+
+    # Helper method to determine MSAN-level impact:
+    def _calculate_msan_level_impact(self, results_df):
+        """
+        Calculate impact at MSAN level instead of record level.
+        If any record for an MSAN is 'Partially Impacted', the entire MSAN is 'Partially Impacted'
+        """
+        if results_df.empty or 'MSANCODE' not in results_df.columns:
+            return results_df
+        
+        # Ensure Impact column exists
+        if 'Impact' not in results_df.columns:
+            print("Warning: Impact column not found, setting default impact")
+            results_df['Impact'] = 'Isolated'  # Default to most conservative impact
+        
+        # Group by MSANCODE and determine the overall impact
+        msan_impact = {}
+        for msan in results_df['MSANCODE'].unique():
+            msan_records = results_df[results_df['MSANCODE'] == msan]
+            
+            # If ANY record is Partially Impacted, the entire MSAN is Partially Impacted
+            if 'Partially Impacted' in msan_records['Impact'].values:
+                msan_impact[msan] = 'Partially Impacted'
+            else:
+                # Check if all records are Isolated
+                if 'Isolated' in msan_records['Impact'].values:
+                    msan_impact[msan] = 'Isolated'
+                else:
+                    # Default to the first impact type found
+                    msan_impact[msan] = msan_records['Impact'].iloc[0] if not msan_records.empty else 'Unknown'
+        
+        # Apply the MSAN-level impact to all records
+        results_df = results_df.copy()
+        results_df['Impact'] = results_df['MSANCODE'].map(msan_impact)
+        
+        return results_df
+    
+
     def generate_base_results(self, dwn_identifier):
         """Generate base results with path calculations"""
         start_time = time.time()
@@ -106,7 +144,7 @@ class UnifiedNetworkImpactAnalyzer:
         return self.final_df
     
     def analyze_exchange_impact(self, dwn_exchange):
-        """Analyze impact when an exchange fails"""
+        """Analyze impact when an exchange fails - with MSAN-level impact calculation"""
         if self.final_df is None:
             raise ValueError("Must call generate_base_results() first")
         
@@ -128,10 +166,16 @@ class UnifiedNetworkImpactAnalyzer:
         if not physical_impact.empty:
             results.append(physical_impact)
             
-        return self._combine_results(results)
-    
+        # Combine results and apply MSAN-level impact logic
+        combined_results = self._combine_results(results)
+        
+        if not combined_results.empty:
+            combined_results = self._calculate_msan_level_impact(combined_results)
+        
+        return combined_results
+
     def analyze_node_impact(self, dwn_node):
-        """Analyze impact when a node fails"""
+        """Analyze impact when a node fails - with MSAN-level impact calculation"""
         if self.final_df is None:
             raise ValueError("Must call generate_base_results() first")
         
@@ -152,17 +196,23 @@ class UnifiedNetworkImpactAnalyzer:
         if not physical_impact.empty:
             results.append(physical_impact)
             
-        return self._combine_results(results)
+        # Combine results and apply MSAN-level impact logic
+        combined_results = self._combine_results(results)
+        
+        if not combined_results.empty:
+            combined_results = self._calculate_msan_level_impact(combined_results)
+        
+        return combined_results
     
     def _analyze_direct_impact(self, column, value, impact_type):
-        """Generic method for analyzing direct impact on a column"""
+        """Generic method for analyzing direct impact on a column - with Impact column guarantee"""
         impact_df = self.final_df[self.final_df[column] == value].copy()
         if not impact_df.empty:
             impact_df['Impact'] = impact_type
         return impact_df
     
     def _analyze_target_exchange_impact(self, dwn_exchange):
-        """Analyze direct impact on target exchange (AGG/Bitstream)"""
+        """Analyze direct impact on target exchange (AGG/Bitstream) - with Impact column guarantee"""
         target_exchange_col = self.column_map['target_exchange']
         target_hostname_col = self.column_map['target_hostname']
         
@@ -179,7 +229,7 @@ class UnifiedNetworkImpactAnalyzer:
         # Get ALL nodes in the affected exchange, not just target nodes
         affected_nodes = self._get_exchange_nodes(dwn_exchange)
         
-        # Calculate alternative paths only for network type (Others don't need this)
+        # Calculate alternative paths only for network type
         if self.data_type == 'network':
             # Create graph excluding ALL nodes from the affected exchange
             graph = self.model.draw_graph(excluded_nodes=affected_nodes)
@@ -190,6 +240,7 @@ class UnifiedNetworkImpactAnalyzer:
                 axis=1
             )
             
+            # Set initial impact
             all_affected['Impact'] = all_affected['Path2'].apply(
                 lambda x: 'Partially Impacted' if isinstance(x, list) else 'Isolated'
             )
@@ -200,7 +251,7 @@ class UnifiedNetworkImpactAnalyzer:
         return all_affected
     
     def _analyze_exchange_physical_path_impact(self, dwn_exchange):
-        """Analyze physical path impact for exchange failure"""
+        """Analyze physical path impact for exchange failure - with Impact column guarantee"""
         # Get nodes in the affected exchange
         affected_nodes = self._get_exchange_nodes(dwn_exchange)
         
@@ -222,6 +273,7 @@ class UnifiedNetworkImpactAnalyzer:
             axis=1
         )
         
+        # Set initial impact
         affected_msans['Impact'] = affected_msans['Path2'].apply(
             lambda x: 'Partially Impacted' if isinstance(x, list) else 'Isolated'
         )
@@ -229,7 +281,7 @@ class UnifiedNetworkImpactAnalyzer:
         return affected_msans
     
     def _analyze_target_node_impact(self, dwn_node):
-        """Analyze direct impact on target nodes (AGG/BNG/Bitstream)"""
+        """Analyze direct impact on target nodes (AGG/BNG/Bitstream) - with Impact column guarantee"""
         target_hostname_col = self.column_map['target_hostname']
         bng_hostname_col = self.column_map['bng_hostname']
         
@@ -253,25 +305,26 @@ class UnifiedNetworkImpactAnalyzer:
         # Determine impact based on data type and circuit type
         if self.data_type == 'network':
             # For network type, use circuit type information
-            msan_impacts = []
+            msan_impacts = {}
             for msan in all_affected.MSANCODE.unique():
-                msan_df = all_affected[all_affected.MSANCODE == msan].copy()
+                msan_df = all_affected[all_affected.MSANCODE == msan]
                 
                 if 'cir_type' in msan_df.columns and 'Single' in msan_df['cir_type'].values:
-                    msan_df['Impact'] = 'Isolated'
+                    msan_impacts[msan] = 'Isolated'
                 else:
-                    msan_df['Impact'] = 'Partially Impacted'
-                    
-                msan_impacts.append(msan_df)
+                    msan_impacts[msan] = 'Partially Impacted'
             
-            return pd.concat(msan_impacts, ignore_index=True)
+            # Apply MSAN-level impact
+            all_affected['Impact'] = all_affected['MSANCODE'].map(msan_impacts)
         else:
             # For bitstream type, mark as isolated
             all_affected['Impact'] = 'Isolated'
-            return all_affected
+        
+        return all_affected
+
     
     def _analyze_node_physical_path_impact(self, dwn_node):
-        """Analyze physical path impact for node failure"""
+        """Analyze physical path impact for node failure - with Impact column guarantee"""
         # Find MSANs with the node in their paths
         affected_msans = self._find_msans_with_nodes_in_path([dwn_node])
         
@@ -287,6 +340,7 @@ class UnifiedNetworkImpactAnalyzer:
             axis=1
         )
         
+        # Set initial impact
         affected_msans['Impact'] = affected_msans['Path2'].apply(
             lambda x: 'Partially Impacted' if isinstance(x, list) else 'Isolated'
         )
@@ -487,6 +541,9 @@ class UnifiedNetworkImpactAnalyzer:
             return 'Traffic Rerouted'
 
 
+
+
+
 class UnifiedCIRModel:
     """Unified CIR Model that handles both network and bitstream scenarios"""
     
@@ -664,5 +721,4 @@ class UnifiedCIRModel:
         print(f"Optimized path calculation time: {execution_time:.3f} seconds")
         
         return dfx_optimized
-    
     
