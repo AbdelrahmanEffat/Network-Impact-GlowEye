@@ -160,21 +160,24 @@ async def analyze_network_impact_complete(request: AnalysisRequest):
         
         execution_time = time.time() - start_time
         
-        # Add Route_Status column
-        we_results['Route_Status'] = we_results.apply(
-            lambda row: we_analyzer._calculate_route_status(row['Path'], row['Path2']),
-            axis=1
-        )
-        others_results['Route_Status'] = others_results.apply(
-            lambda row: others_analyzer._calculate_route_status(row['Path'], row['Path2']),
-            axis=1
-        )
+        # Apply MSAN-level Route_Status calculation for WE data
+        if not we_results.empty:
+            we_results = we_analyzer._calculate_msan_level_route_status(we_results)
+
+        # For Others data, use individual Route_Status calculation
+        if not others_results.empty:
+            others_results['Route_Status'] = others_results.apply(
+                lambda row: others_analyzer._calculate_route_status_individual(
+                    row['Path'], row['Path2'], row.get('STATUS', 'UP'), row['Impact']
+                ),
+                axis=1
+            )
         
         # Create summaries
         we_impact_summary = _create_impact_summary(we_results)
         others_impact_summary = _create_impact_summary(others_results)
         
-        # Convert to serializable format using our new function
+        # Convert to serializable format
         we_results_data = convert_dataframe_to_serializable(we_results)
         others_results_data = convert_dataframe_to_serializable(others_results)
         

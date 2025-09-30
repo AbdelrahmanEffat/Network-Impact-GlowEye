@@ -677,7 +677,87 @@ class UnifiedNetworkImpactAnalyzer:
         results.to_csv(filename, index=False)
         print(f"Results exported to {filename}")
 
-    # Add this method to the UnifiedNetworkImpactAnalyzer class in analyzer.py
+    # method to calculate Route_Status based on the MSAN-level conditions
+    def _calculate_route_status_for_msan(self, msan_records):
+        """
+        Calculate Route_Status for an entire MSAN based on multiple conditions across records
+        """
+        # Condition 1: Check if any UP record with Partially Impacted and valid backup path
+        condition1_records = msan_records[
+            (msan_records['STATUS'] == 'UP') & 
+            (msan_records['Impact'] == 'Partially Impacted') &
+            (msan_records['Path2'].apply(lambda x: (isinstance(x, (list, tuple)) and len(x) > 0)))
+        ]
+        
+        if not condition1_records.empty:
+            return 'Primary Path Active'
+        
+        # Condition 2: Check ST records with Partially Impacted and valid primary path
+        condition2_records = msan_records[
+            (msan_records['STATUS'] == 'ST') & 
+            (msan_records['Impact'] == 'Partially Impacted') &
+            (msan_records['Path'].apply(lambda x: (isinstance(x, (list, tuple)) and len(x) > 0)))
+        ]
+        
+        if not condition2_records.empty:
+            return 'Traffic Rerouted'
+        
+        # Condition 3: Check if all records are Isolated
+        if (msan_records['Impact'] == 'Isolated').all():
+            return 'Inactive Paths'
+        
+        # Default fallback
+        return 'UNKN'
+
+    def _calculate_msan_level_route_status(self, results_df):
+        """
+        Apply MSAN-level Route_Status calculation to all records
+        """
+        if results_df.empty or 'MSANCODE' not in results_df.columns:
+            return results_df
+        
+        # Group by MSANCODE and calculate Route_Status for each MSAN
+        msan_route_status = {}
+        for msan in results_df['MSANCODE'].unique():
+            msan_records = results_df[results_df['MSANCODE'] == msan]
+            route_status = self._calculate_route_status_for_msan(msan_records)
+            msan_route_status[msan] = route_status
+        
+        # Apply the MSAN-level Route_Status to all records
+        results_df = results_df.copy()
+        results_df['Route_Status'] = results_df['MSANCODE'].map(msan_route_status)
+        
+        return results_df
+
+    def _calculate_route_status_individual(self, path1, path2, status, impact):
+        """
+        Individual record Route_Status calculation (for non-MSAN level data)
+        """
+        def is_valid_path(path):
+            if not (isinstance(path, (list, tuple)) and len(path) > 0):
+                return False
+            # Also check it's not an error message disguised as a tuple
+            if isinstance(path, (list, tuple)) and len(path) == 1:
+                if isinstance(path[0], str) and any(error in path[0] for error in ['NetworkXNoPath', 'Error', 'NodeNotFound']):
+                    return False
+            return True
+        
+        # Condition 1: UP + Partially Impacted + valid backup path
+        if status == 'UP' and impact == 'Partially Impacted' and is_valid_path(path2):
+            return 'Primary Path Active'
+        
+        # Condition 2: ST + Partially Impacted + valid primary path  
+        elif status == 'ST' and impact == 'Partially Impacted' and is_valid_path(path1):
+            return 'Traffic Rerouted'
+        
+        # Condition 3: Isolated impact
+        elif impact == 'Isolated':
+            return 'Inactive Paths'
+        
+        # Default
+        return 'UNKN'
+
+    '''
     def _calculate_route_status(self, path1, path2):
         """
         Calculate Route_Status by comparing final destinations of two paths
@@ -710,6 +790,8 @@ class UnifiedNetworkImpactAnalyzer:
             return 'Primary Path Active'
         else:
             return 'Traffic Rerouted'
+        
+    '''
 
 
 
