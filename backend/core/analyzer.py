@@ -89,7 +89,46 @@ class UnifiedNetworkImpactAnalyzer:
         print(f"Data preprocessed. Final shape: {self.df_report.shape}")
     
 
-    # Helper method to determine MSAN-level impact:
+    def _find_records_with_nodes_in_path(self, affected_nodes):
+        """Find MSANs that have any of the affected nodes in their paths - returns MSANs, not individual records"""
+        # Check Path column for affected nodes
+        path_mask = self.final_df['Path'].apply(
+            lambda path: (isinstance(path, list) and len(path) >= 3 and 
+                        any(node in path[1:-1] for node in affected_nodes))
+        )
+        
+        # Check Path2 column if it exists
+        path2_mask = pd.Series([False] * len(self.final_df))
+        if 'Path2' in self.final_df.columns:
+            path2_mask = self.final_df['Path2'].apply(
+                lambda path: (isinstance(path, list) and len(path) >= 3 and 
+                            any(node in path[1:-1] for node in affected_nodes))
+            )
+        
+        # Find all affected MSANs (not individual records)
+        if self.data_type == 'network':
+            # For network type, get MSANs with UP status that have affected nodes in paths
+            affected_up = self.final_df[
+                (path_mask | path2_mask) & (self.final_df['STATUS'] == 'UP')
+            ]
+            
+            if affected_up.empty:
+                return pd.DataFrame()
+            
+            affected_msans = affected_up.MSANCODE.unique()
+        else:
+            # For Others type, get MSANs that have affected nodes in paths
+            affected_records = self.final_df[path_mask | path2_mask]
+            if affected_records.empty:
+                return pd.DataFrame()
+            
+            affected_msans = affected_records.MSANCODE.unique()
+        
+        # Return a small DataFrame with just the affected MSANs for consistency
+        return pd.DataFrame({'MSANCODE': affected_msans})
+
+
+    # Helper method to determine MSAN-level impact:, it should be replaced by abvove methode
     def _calculate_msan_level_impact(self, results_df):
         """
         Calculate impact at MSAN level instead of record level.
@@ -143,8 +182,28 @@ class UnifiedNetworkImpactAnalyzer:
         
         return self.final_df
     
+    ## ISP-Case, ips lvl not whole MSAN
+    def _calculate_impact_for_others(self, results_df):
+        """
+        Calculate impact for Others data - ensure we have all MSAN records
+        and only mark affected ones
+        """
+        if results_df.empty:
+            return results_df
+        
+        # For Others data, we want to keep all records but only mark affected ones
+        # The impact should already be set by the individual analysis methods
+        
+        # Ensure we have 'No Impact' for records without specific impact
+        if 'Impact' not in results_df.columns:
+            results_df['Impact'] = 'No Impact'
+        else:
+            results_df['Impact'] = results_df['Impact'].fillna('No Impact')
+        
+        return results_df
+
     def analyze_exchange_impact(self, dwn_exchange):
-        """Analyze impact when an exchange fails - with MSAN-level impact calculation"""
+        """Analyze impact when an exchange fails - with correct logic for Others data"""
         if self.final_df is None:
             raise ValueError("Must call generate_base_results() first")
         
@@ -166,16 +225,21 @@ class UnifiedNetworkImpactAnalyzer:
         if not physical_impact.empty:
             results.append(physical_impact)
             
-        # Combine results and apply MSAN-level impact logic
+        # Combine results
         combined_results = self._combine_results(results)
         
         if not combined_results.empty:
-            combined_results = self._calculate_msan_level_impact(combined_results)
+            if self.data_type == 'network':
+                # For WE data, use MSAN-level impact
+                combined_results = self._calculate_msan_level_impact(combined_results)
+            else:
+                # For Others data, ensure proper impact calculation
+                combined_results = self._calculate_impact_for_others(combined_results)
         
         return combined_results
 
     def analyze_node_impact(self, dwn_node):
-        """Analyze impact when a node fails - with MSAN-level impact calculation"""
+        """Analyze impact when a node fails - with correct logic for Others data"""
         if self.final_df is None:
             raise ValueError("Must call generate_base_results() first")
         
@@ -196,11 +260,16 @@ class UnifiedNetworkImpactAnalyzer:
         if not physical_impact.empty:
             results.append(physical_impact)
             
-        # Combine results and apply MSAN-level impact logic
+        # Combine results
         combined_results = self._combine_results(results)
         
         if not combined_results.empty:
-            combined_results = self._calculate_msan_level_impact(combined_results)
+            if self.data_type == 'network':
+                # For WE data, use MSAN-level impact
+                combined_results = self._calculate_msan_level_impact(combined_results)
+            else:
+                # For Others data, ensure proper impact calculation
+                combined_results = self._calculate_impact_for_others(combined_results)
         
         return combined_results
     
@@ -212,99 +281,91 @@ class UnifiedNetworkImpactAnalyzer:
         return impact_df
     
     def _analyze_target_exchange_impact(self, dwn_exchange):
-        """Analyze direct impact on target exchange (AGG/Bitstream) - with Impact column guarantee"""
+        """Analyze direct impact on target exchange (AGG/Bitstream) - fixed to keep all MSAN records"""
         target_exchange_col = self.column_map['target_exchange']
         target_hostname_col = self.column_map['target_hostname']
         
+        # Find records directly impacted by the exchange failure
         direct_impact = self.final_df[self.final_df[target_exchange_col] == dwn_exchange]
         
         if direct_impact.empty:
             return pd.DataFrame()
         
-        # Get all records for affected MSANs
-        all_affected = self.final_df[
-            self.final_df.MSANCODE.isin(direct_impact.MSANCODE.unique())
-        ].copy()
-        
-        # Get ALL nodes in the affected exchange, not just target nodes
-        affected_nodes = self._get_exchange_nodes(dwn_exchange)
-        
-        # Calculate alternative paths only for network type
         if self.data_type == 'network':
-            # Create graph excluding ALL nodes from the affected exchange
-            graph = self.model.draw_graph(excluded_nodes=affected_nodes)
+            # For network type, get all records for affected MSANs
+            all_affected = self.final_df[
+                self.final_df.MSANCODE.isin(direct_impact.MSANCODE.unique())
+            ].copy()
+            
+            # Get ALL nodes in the affected exchange
+            affected_nodes = self._get_exchange_nodes(dwn_exchange)
             
             # Calculate alternative paths
+            graph = self.model.draw_graph(excluded_nodes=affected_nodes)
+            
             all_affected['Path2'] = all_affected.apply(
                 lambda row: self.model.calculate_path(graph, row['EDGE'], row[target_hostname_col]),
                 axis=1
             )
             
-            # Set initial impact
             all_affected['Impact'] = all_affected['Path2'].apply(
                 lambda x: 'Partially Impacted' if isinstance(x, list) else 'Isolated'
             )
         else:
-            # For bitstream type, just mark as isolated
-            all_affected['Impact'] = 'Isolated'
+            # For Others data, get ALL records for the affected MSANs but only mark specific ones
+            affected_msans = direct_impact.MSANCODE.unique()
+            all_affected = self.final_df[
+                self.final_df.MSANCODE.isin(affected_msans)
+            ].copy()
+            
+            # Get ALL nodes in the affected exchange
+            affected_nodes = self._get_exchange_nodes(dwn_exchange)
+            
+            # Calculate alternative paths ONLY for the directly affected records
+            graph = self.model.draw_graph(excluded_nodes=affected_nodes)
+            
+            # Create a mask for directly affected records
+            direct_impact_mask = all_affected[target_exchange_col] == dwn_exchange
+            
+            # Initialize Path2 and Impact columns
+            all_affected['Path2'] = None
+            all_affected['Impact'] = 'No Impact'  # Default to no impact
+            
+            # Calculate paths and set impact only for directly affected records
+            affected_indices = all_affected[direct_impact_mask].index
+            for idx in affected_indices:
+                row = all_affected.loc[idx]
+                path2 = self.model.calculate_path(graph, row['EDGE'], row[target_hostname_col])
+                all_affected.at[idx, 'Path2'] = path2
+                all_affected.at[idx, 'Impact'] = 'Partially Impacted' if isinstance(path2, list) else 'Isolated'
         
         return all_affected
-    
-    def _analyze_exchange_physical_path_impact(self, dwn_exchange):
-        """Analyze physical path impact for exchange failure - with Impact column guarantee"""
-        # Get nodes in the affected exchange
-        affected_nodes = self._get_exchange_nodes(dwn_exchange)
-        
-        if not affected_nodes:
-            return pd.DataFrame()
-        
-        # Find MSANs with affected nodes in their paths
-        affected_msans = self._find_msans_with_nodes_in_path(affected_nodes)
-        
-        if affected_msans.empty:
-            return pd.DataFrame()
-        
-        # Calculate alternative paths
-        graph = self.model.draw_graph(excluded_nodes=affected_nodes)
-        target_hostname_col = self.column_map['target_hostname']
-        
-        affected_msans['Path2'] = affected_msans.apply(
-            lambda row: self.model.calculate_path(graph, row['EDGE'], row[target_hostname_col]),
-            axis=1
-        )
-        
-        # Set initial impact
-        affected_msans['Impact'] = affected_msans['Path2'].apply(
-            lambda x: 'Partially Impacted' if isinstance(x, list) else 'Isolated'
-        )
-        
-        return affected_msans
-    
+
     def _analyze_target_node_impact(self, dwn_node):
-        """Analyze direct impact on target nodes (AGG/BNG/Bitstream) - with Impact column guarantee"""
+        """Analyze direct impact on target nodes (AGG/BNG/Bitstream) - fixed to keep all MSAN records"""
         target_hostname_col = self.column_map['target_hostname']
         bng_hostname_col = self.column_map['bng_hostname']
         
-        # Build condition based on data type
         if self.data_type == 'network' and bng_hostname_col:
+            # Network data: BNG or distribution hostname affected
             direct_impact = self.final_df[
                 (self.final_df[bng_hostname_col] == dwn_node) | 
                 (self.final_df[target_hostname_col] == dwn_node)
             ]
         else:
+            # Others data: Only bitstream hostname affected
             direct_impact = self.final_df[self.final_df[target_hostname_col] == dwn_node]
         
         if direct_impact.empty:
             return pd.DataFrame()
         
-        # Get all records for affected MSANs
-        all_affected = self.final_df[
-            self.final_df.MSANCODE.isin(direct_impact.MSANCODE.unique())
-        ].copy()
-        
-        # Determine impact based on data type and circuit type
         if self.data_type == 'network':
-            # For network type, use circuit type information
+            # For network type, get all records for affected MSANs
+            all_affected = self.final_df[
+                self.final_df.MSANCODE.isin(direct_impact.MSANCODE.unique())
+            ].copy()
+            
+            # Determine impact based on circuit type
             msan_impacts = {}
             for msan in all_affected.MSANCODE.unique():
                 msan_df = all_affected[all_affected.MSANCODE == msan]
@@ -314,38 +375,148 @@ class UnifiedNetworkImpactAnalyzer:
                 else:
                     msan_impacts[msan] = 'Partially Impacted'
             
-            # Apply MSAN-level impact
             all_affected['Impact'] = all_affected['MSANCODE'].map(msan_impacts)
         else:
-            # For bitstream type, mark as isolated
-            all_affected['Impact'] = 'Isolated'
+            # For Others data, get ALL records for the affected MSANs but only mark specific ones
+            affected_msans = direct_impact.MSANCODE.unique()
+            all_affected = self.final_df[
+                self.final_df.MSANCODE.isin(affected_msans)
+            ].copy()
+            
+            # Calculate alternative paths ONLY for the directly affected records
+            graph = self.model.draw_graph(excluded_nodes=[dwn_node])
+            
+            # Create a mask for directly affected records
+            if self.data_type == 'network' and bng_hostname_col:
+                direct_impact_mask = (all_affected[bng_hostname_col] == dwn_node) | (all_affected[target_hostname_col] == dwn_node)
+            else:
+                direct_impact_mask = all_affected[target_hostname_col] == dwn_node
+            
+            # Initialize Path2 and Impact columns
+            all_affected['Path2'] = None
+            all_affected['Impact'] = 'No Impact'  # Default to no impact
+            
+            # Calculate paths and set impact only for directly affected records
+            affected_indices = all_affected[direct_impact_mask].index
+            for idx in affected_indices:
+                row = all_affected.loc[idx]
+                path2 = self.model.calculate_path(graph, row['EDGE'], row[target_hostname_col])
+                all_affected.at[idx, 'Path2'] = path2
+                all_affected.at[idx, 'Impact'] = 'Partially Impacted' if isinstance(path2, list) else 'Isolated'
         
         return all_affected
 
-    
-    def _analyze_node_physical_path_impact(self, dwn_node):
-        """Analyze physical path impact for node failure - with Impact column guarantee"""
-        # Find MSANs with the node in their paths
-        affected_msans = self._find_msans_with_nodes_in_path([dwn_node])
+    def _analyze_exchange_physical_path_impact(self, dwn_exchange):
+        """Analyze physical path impact for exchange failure - fixed to keep all MSAN records"""
+        # Get nodes in the affected exchange
+        affected_nodes = self._get_exchange_nodes(dwn_exchange)
         
-        if affected_msans.empty:
+        if not affected_nodes:
+            return pd.DataFrame()
+        
+        # Find records with affected nodes in their paths
+        affected_records = self._find_records_with_nodes_in_path(affected_nodes)
+        
+        if affected_records.empty:
+            return pd.DataFrame()
+        
+        # Calculate alternative paths
+        graph = self.model.draw_graph(excluded_nodes=affected_nodes)
+        target_hostname_col = self.column_map['target_hostname']
+        
+        if self.data_type == 'network':
+            # For network data, get all records for affected MSANs
+            affected_msans = affected_records.MSANCODE.unique()
+            all_affected = self.final_df[
+                self.final_df.MSANCODE.isin(affected_msans)
+            ].copy()
+            
+            all_affected['Path2'] = all_affected.apply(
+                lambda row: self.model.calculate_path(graph, row['EDGE'], row[target_hostname_col]),
+                axis=1
+            )
+            
+            # Set impact based on path existence
+            all_affected['Impact'] = all_affected['Path2'].apply(
+                lambda x: 'Partially Impacted' if isinstance(x, list) else 'Isolated'
+            )
+            
+            # Apply MSAN-level impact
+            all_affected = self._calculate_msan_level_impact(all_affected)
+        else:
+            # For Others data, get ALL records for affected MSANs but only mark specific ones
+            affected_msans = affected_records.MSANCODE.unique()
+            all_affected = self.final_df[
+                self.final_df.MSANCODE.isin(affected_msans)
+            ].copy()
+            
+            # Initialize Path2 and Impact columns
+            all_affected['Path2'] = None
+            all_affected['Impact'] = 'No Impact'  # Default to no impact
+            
+            # Calculate paths and set impact only for records that have affected nodes in their paths
+            for idx, row in all_affected.iterrows():
+                path = row['Path']
+                if isinstance(path, list) and any(node in path[1:-1] for node in affected_nodes):
+                    path2 = self.model.calculate_path(graph, row['EDGE'], row[target_hostname_col])
+                    all_affected.at[idx, 'Path2'] = path2
+                    all_affected.at[idx, 'Impact'] = 'Partially Impacted' if isinstance(path2, list) else 'Isolated'
+        
+        return all_affected
+
+    def _analyze_node_physical_path_impact(self, dwn_node):
+        """Analyze physical path impact for node failure - fixed to keep all MSAN records"""
+        # Find records with the node in their paths
+        affected_records = self._find_records_with_nodes_in_path([dwn_node])
+        
+        if affected_records.empty:
             return pd.DataFrame()
         
         # Calculate alternative paths excluding the specific node
         graph = self.model.draw_graph(excluded_nodes=[dwn_node])
         target_hostname_col = self.column_map['target_hostname']
         
-        affected_msans['Path2'] = affected_msans.apply(
-            lambda row: self.model.calculate_path(graph, row['EDGE'], row[target_hostname_col]),
-            axis=1
-        )
+        if self.data_type == 'network':
+            # For network data, get all records for affected MSANs
+            affected_msans = affected_records.MSANCODE.unique()
+            all_affected = self.final_df[
+                self.final_df.MSANCODE.isin(affected_msans)
+            ].copy()
+            
+            all_affected['Path2'] = all_affected.apply(
+                lambda row: self.model.calculate_path(graph, row['EDGE'], row[target_hostname_col]),
+                axis=1
+            )
+            
+            # Set impact based on path existence
+            all_affected['Impact'] = all_affected['Path2'].apply(
+                lambda x: 'Partially Impacted' if isinstance(x, list) else 'Isolated'
+            )
+            
+            # Apply MSAN-level impact
+            all_affected = self._calculate_msan_level_impact(all_affected)
+        else:
+            # For Others data, get ALL records for affected MSANs but only mark specific ones
+            affected_msans = affected_records.MSANCODE.unique()
+            all_affected = self.final_df[
+                self.final_df.MSANCODE.isin(affected_msans)
+            ].copy()
+            
+            # Initialize Path2 and Impact columns
+            all_affected['Path2'] = None
+            all_affected['Impact'] = 'No Impact'  # Default to no impact
+            
+            # Calculate paths and set impact only for records that have the node in their paths
+            for idx, row in all_affected.iterrows():
+                path = row['Path']
+                if isinstance(path, list) and dwn_node in path[1:-1]:
+                    path2 = self.model.calculate_path(graph, row['EDGE'], row[target_hostname_col])
+                    all_affected.at[idx, 'Path2'] = path2
+                    all_affected.at[idx, 'Impact'] = 'Partially Impacted' if isinstance(path2, list) else 'Isolated'
         
-        # Set initial impact
-        affected_msans['Impact'] = affected_msans['Path2'].apply(
-            lambda x: 'Partially Impacted' if isinstance(x, list) else 'Isolated'
-        )
+        return all_affected
         
-        return affected_msans
+
     
     def _get_exchange_nodes(self, dwn_exchange):
         """Get all nodes belonging to a specific exchange - enhanced version"""
