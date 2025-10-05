@@ -103,6 +103,8 @@ async def health_check():
         "analyzer_ready": analyzer is not None
     }
 
+# Add this to your statistics_api.py in the analyze_multiple_nodes endpoint
+
 @app.post("/analyze/nodes")
 async def analyze_multiple_nodes(request: NodeAnalysisRequest):
     """
@@ -110,6 +112,7 @@ async def analyze_multiple_nodes(request: NodeAnalysisRequest):
     
     - **nodes**: List of node identifiers to analyze
     - **include_detailed_breakdown**: Whether to include detailed ISP/service breakdown
+    - **export_csv**: Whether to export affected data to CSV files for validation
     """
     if analyzer is None:
         raise HTTPException(status_code=503, detail="Service not ready")
@@ -120,20 +123,22 @@ async def analyze_multiple_nodes(request: NodeAnalysisRequest):
     try:
         logger.info(f"Analyzing {len(request.nodes)} nodes: {request.nodes}")
         
-        results = analyzer.analyze_nodes(request.nodes)
+        # Pass export_csv parameter (default to True for validation)
+        export_csv = getattr(request, 'export_csv', True)
+        results = analyzer.analyze_nodes(request.nodes, export_csv=export_csv)
         
         # Simplify response if detailed breakdown not requested
         if not request.include_detailed_breakdown:
-            for node_result in results['node_results'].values():
-                if 'error' not in node_result:
-                    node_result.pop('we_statistics', None)
-                    node_result.pop('others_statistics', None)
+            if 'results' in results and 'we_statistics' in results['results']:
+                results['results'].pop('we_statistics', None)
+                results['results'].pop('others_statistics', None)
         
         return {
             "status": "success",
             "request": {
                 "nodes_analyzed": request.nodes,
-                "total_nodes": len(request.nodes)
+                "total_nodes": len(request.nodes),
+                "export_csv": export_csv
             },
             "results": results
         }
