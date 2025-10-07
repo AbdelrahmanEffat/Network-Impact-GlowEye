@@ -546,17 +546,17 @@
     <div>
         <div class="stat-card">
             <div class="stat-value">{{ we_stats.partial_msans if we_stats else 0 }}</div>
-            <div class="stat-label">Partially Impacted MSANs</div>
+            <div class="stat-label">Path Changed MSANs</div>
         </div>
 
         <div class="stat-card">
             <div class="stat-value">{{ we_stats.partial_vic if we_stats else 0 }}</div>
-            <div class="stat-label">Partially Impacted VIC Cabinets</div>
+            <div class="stat-label">Path Changed VIC Cabinets</div>
         </div>
 
         <div class="stat-card">
             <div class="stat-value">{{ we_stats.partial_sub if we_stats else 0 }}</div>
-            <div class="stat-label">Partial Impacted Subscribers</div>
+            <div class="stat-label">Path Changed Subscribers</div>
         </div>
 
         <div class="stat-card">
@@ -604,19 +604,36 @@
            
         </div>
 
+        <!-- Middle Column: Path Changed -->
+        <div>
+            <div class="stat-card">
+                <div class="stat-value">{{ others_stats.path_changed_msans if others_stats else 0 }}</div>
+                <div class="stat-label">Path Changed MSANs</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ others_stats.o_path_changed_vic if others_stats else 0 }}</div>
+                <div class="stat-label">Path Changed VIC Cabinets for others</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ others_stats.path_changed_sub if others_stats else 0 }}</div>
+                <div class="stat-label">Path Changed Subscribers</div>
+            </div>
+           
+        </div>
+
         <!-- Right Column: Partial -->
         <div>
             <div class="stat-card">
                 <div class="stat-value">{{ others_stats.partial_msans if others_stats else 0 }}</div>
-                <div class="stat-label">Partially Impacted MSANs</div>
+                <div class="stat-label">Partial MSANs</div>
             </div>
             <div class="stat-card">
                 <div class="stat-value">{{ others_stats.o_partial_vic if others_stats else 0 }}</div>
-                <div class="stat-label">Partially Impacted  on VIC cabinets for Others</div>
+                <div class="stat-label">Partial  on VIC cabinets for Others</div>
             </div>
             <div class="stat-card">
                 <div class="stat-value">{{ others_stats.partial_sub if others_stats else 0 }}</div>
-                <div class="stat-label">Partially Impacted Subscribers</div>
+                <div class="stat-label">Partial Subscribers</div>
             </div>
           
         </div>
@@ -1150,11 +1167,11 @@
         const impactCtx = document.getElementById('impactChart')?.getContext('2d');
         if (impactCtx) {
             const impactData = {
-                labels: ['Isolated', 'Partially Impacted'],
+                labels: ['Isolated', 'Path Changed'],
                 datasets: [{
                     data: [
                         {{ result.impact_summary.we.impact_breakdown.Isolated|default(0) + result.impact_summary.others.impact_breakdown.Isolated|default(0) }},
-                        {{ result.impact_summary.we.impact_breakdown['Partially Impacted']|default(0) + result.impact_summary.others.impact_breakdown['Partially Impacted']|default(0) }}
+                        {{ result.impact_summary.we.impact_breakdown['Path Changed']|default(0) + result.impact_summary.others.impact_breakdown['Path Changed']|default(0) }}
                     ],
                     backgroundColor: ['#ff6b6b', '#ffe066']
                 }]
@@ -1178,7 +1195,7 @@
             new Chart(weMsansCtx, {
                 type: 'bar',
                 data: {
-                    labels: ['Isolated', 'Partially Impacted'],
+                    labels: ['Isolated', 'Path Changed'],
                     datasets: [{
                         label: 'WE MSANs',
                         data: [
@@ -1203,7 +1220,7 @@
             new Chart(weSubscribersCtx, {
                 type: 'bar',
                 data: {
-                    labels: ['Isolated', 'Partially Impacted'],
+                    labels: ['Isolated', 'Path Changed'],
                     datasets: [{
                         label: 'WE Subscribers',
                         data: [
@@ -1228,7 +1245,7 @@
             new Chart(othersMsansCtx, {
                 type: 'bar',
                 data: {
-                    labels: ['Isolated', 'Partially Impacted'],
+                    labels: ['Isolated', 'Path Changed'],
                     datasets: [{
                         label: 'Others MSANs',
                         data: [
@@ -1253,7 +1270,7 @@
             new Chart(othersSubscribersCtx, {
                 type: 'bar',
                 data: {
-                    labels: ['Isolated', 'Partially Impacted'],
+                    labels: ['Isolated', 'Path Changed'],
                     datasets: [{
                         label: 'Others Subscribers',
                         data: [

@@ -423,7 +423,7 @@ def _calculate_we_statistics(we_results):
     
     we_unique = we_results.drop_duplicates(subset=['MSANCODE'])
     isolated_we = we_unique[we_unique['Impact'] == 'Isolated']
-    partial_we = we_unique[we_unique['Impact'] == 'Partially Impacted']
+    partial_we = we_unique[we_unique['Impact'] == 'Path Changed']
     
     return {
         'isolated_msans': len(isolated_we),
@@ -438,46 +438,173 @@ def _calculate_we_statistics(we_results):
         'iso_vic': (isolated_we['VIC'] == 'VIC').sum() if not isolated_we.empty else 0
     }
 
+
 def _calculate_others_statistics(others_results):
     """Calculate Others statistics (moved from frontend)"""
     if others_results.empty:
         return {}
     
-    others_unique = others_results.drop_duplicates(subset=['MSANCODE'])
-    isolated_others = others_unique[others_unique['Impact'] == 'Isolated']
-    partial_others = others_unique[others_unique['Impact'] == 'Partially Impacted']
+    # Step 1: Group by MSANCODE and analyze Impact values
+    msan_impact_analysis = others_results.groupby('MSANCODE')['Impact'].agg([
+        ('impact_values', 'unique'),  # Get all unique Impact values for this MSAN
+        ('total_entries', 'count'),   # Total number of entries for this MSAN
+        ('isolated_count', lambda x: (x == 'Isolated').sum()),
+        ('partial_count', lambda x: (x == 'Partial').sum()),
+        ('path_changed_count', lambda x: (x == 'Path Changed').sum())
+    ]).reset_index()
     
+    # Step 2: Categorize each MSAN based on the updated rules
+    isolated_msans = []
+    partial_msans = []
+    path_changed_msans = []
+    
+    for _, row in msan_impact_analysis.iterrows():
+        msan = row['MSANCODE']
+        total = row['total_entries']
+        isolated_count = row['isolated_count']
+        partial_count = row['partial_count']
+        path_changed_count = row['path_changed_count']
+        impact_values = row['impact_values']
+        
+        # Rule 1: Isolated if ALL impacts are "Isolated"
+        if isolated_count == total:
+            isolated_msans.append(msan)
+        
+        # Rule 2: Partial if contains both "Partial" and "Isolated"
+        elif 'Partial' in impact_values and 'Isolated' in impact_values:
+            partial_msans.append(msan)
+        
+        # Rule 3: Path Changed if:
+        # - Majority are "Path Changed" OR
+        # - Has mix of "Path Changed" and "Partial" (without Isolated)
+        elif (path_changed_count > total / 2) or ('Path Changed' in impact_values and 'Partial' in impact_values and isolated_count == 0):
+            path_changed_msans.append(msan)
+        
+        # Rule 4: Default case - handle any remaining edge cases as Partial
+        else:
+            partial_msans.append(msan)
+    
+    # Step 3: Get the actual data for each category
+    isolated_data = others_results[others_results['MSANCODE'].isin(isolated_msans)]
+    partial_data = others_results[others_results['MSANCODE'].isin(partial_msans)]
+    path_changed_data = others_results[others_results['MSANCODE'].isin(path_changed_msans)]
+    
+    # For counting unique MSANs
+    isolated_unique = isolated_data.drop_duplicates(subset=['MSANCODE'])
+    partial_unique = partial_data.drop_duplicates(subset=['MSANCODE'])
+    path_changed_unique = path_changed_data.drop_duplicates(subset=['MSANCODE'])
+    
+    # Step 4: Customer counting functions - only count relevant ISP/service combinations
+    def count_affected_customers(df):
+        """Count customers only for the specific ISP/service combination in each row"""
+        total = 0
+        for _, row in df.iterrows():
+            isp = row['ISP']
+            service = row['SERVICE']
+            
+            if isp == 'VODAFONE':
+                if service == 'UBBT':
+                    total += row.get('VODA_UBBT_CUST', 0)
+                elif service == 'HS-BT':
+                    total += row.get('VODA_HS_CUST', 0)
+            elif isp == 'ORANGE':
+                if service == 'UBBT':
+                    total += row.get('ORANGE_UBBT_CUST', 0)
+                elif service == 'HS-BT':
+                    total += row.get('ORANGE_HS_CUST', 0)
+            elif isp == 'ETISALAT':
+                if service == 'UBBT':
+                    total += row.get('ETISLAT_UBBT_CUST', 0)
+                elif service == 'HS-BT':
+                    total += row.get('ETISLAT_HS_CUST', 0)
+            elif isp == 'NOOR':
+                if service == 'UBBT':
+                    total += row.get('NOOR_UBBT_CUST', 0)
+                elif service == 'HS-BT':
+                    total += row.get('NOOR_HS_CUST', 0)
+        
+        return total
+    
+    def count_affected_customers_ftth(df):
+        """Count FTTH customers only for the specific ISP/service combination in each row"""
+        total_ftth = 0
+        for _, row in df.iterrows():
+            isp = row['ISP']
+            service = row['SERVICE']
+            
+            if isp == 'VODAFONE':
+                if service == 'UBBT':
+                    total_ftth += row.get('VODA_UBBT_FTTH_CUST', 0)
+                elif service == 'HS-BT':
+                    total_ftth += row.get('VODA_HS_FTTH_CUST', 0)
+            elif isp == 'ORANGE':
+                if service == 'UBBT':
+                    total_ftth += row.get('ORANGE_UBBT_FTTH_CUST', 0)
+                elif service == 'HS-BT':
+                    total_ftth += row.get('ORANGE_HS_FTTH_CUST', 0)
+            elif isp == 'ETISALAT':
+                if service == 'UBBT':
+                    total_ftth += row.get('ETISLAT_UBBT_FTTH_CUST', 0)
+                elif service == 'HS-BT':
+                    total_ftth += row.get('ETISLAT_HS_FTTH_CUST', 0)
+            elif isp == 'NOOR':
+                if service == 'UBBT':
+                    total_ftth += row.get('NOOR_UBBT_FTTH_CUST', 0)
+                elif service == 'HS-BT':
+                    total_ftth += row.get('NOOR_HS_FTTH_CUST', 0)
+        
+        return total_ftth
+    
+    # Step 5: Return the statistics with updated customer counting
     return {
-        'isolated_msans': len(isolated_others),
-        'partial_msans': len(partial_others),
-        'o_partial_vic': (partial_others['VIC'] == 'VIC').sum() if not partial_others.empty else 0,
-        'o_iso_vic': (isolated_others['VIC'] == 'VIC').sum() if not isolated_others.empty else 0,
-        'isolated_sub': isolated_others['TOTAL_OTHER_CUST'].sum() if not isolated_others.empty else 0,
-        'partial_sub': partial_others['TOTAL_OTHER_CUST'].sum() if not partial_others.empty else 0,
-        'isolated_voda': isolated_others['VODA_CUST'].sum() if not isolated_others.empty else 0,
-        'isolated_voda_ubb': isolated_others['VODA_UBBT_CUST'].sum() if not isolated_others.empty else 0,
-        'isolated_voda_hs': isolated_others['VODA_HS_CUST'].sum() if not isolated_others.empty else 0,
-        'isolated_voda_ubb_ftth': isolated_others['VODA_UBBT_FTTH_CUST'].sum() if not isolated_others.empty else 0,
-        'isolated_voda_hs_ftth': isolated_others['VODA_HS_FTTH_CUST'].sum() if not isolated_others.empty else 0,
-        'isolated_orange': isolated_others['ORANGE_CUST'].sum() if not isolated_others.empty else 0,
-        'isolated_orange_ubb': isolated_others['ORANGE_UBBT_CUST'].sum() if not isolated_others.empty else 0,
-        'isolated_orange_hs': isolated_others['ORANGE_HS_CUST'].sum() if not isolated_others.empty else 0,
-        'isolated_orange_ubb_ftth': isolated_others['ORANGE_UBBT_FTTH_CUST'].sum() if not isolated_others.empty else 0,
-        'isolated_orange_hs_ftth': isolated_others['ORANGE_HS_FTTH_CUST'].sum() if not isolated_others.empty else 0,
-        'isolated_etisalat': isolated_others['ETISLAT_CUST'].sum() if not isolated_others.empty else 0,
-        'isolated_etisalat_ubb': isolated_others['ETISLAT_UBBT_CUST'].sum() if not isolated_others.empty else 0,
-        'isolated_etisalat_hs': isolated_others['ETISLAT_HS_CUST'].sum() if not isolated_others.empty else 0,
-        'isolated_etisalat_ubb_ftth': isolated_others['ETISLAT_UBBT_FTTH_CUST'].sum() if not isolated_others.empty else 0,
-        'isolated_etisalat_hs_ftth': isolated_others['ETISLAT_HS_FTTH_CUST'].sum() if not isolated_others.empty else 0,
-        'isolated_noor': isolated_others['NOOR_CUST'].sum() if not isolated_others.empty else 0,
-        'isolated_noor_ubb': isolated_others['NOOR_UBBT_CUST'].sum() if not isolated_others.empty else 0,
-        'isolated_noor_hs': isolated_others['NOOR_HS_CUST'].sum() if not isolated_others.empty else 0,
-        'isolated_noor_ubb_ftth': isolated_others['NOOR_UBBT_FTTH_CUST'].sum() if not isolated_others.empty else 0,
-        'isolated_noor_hs_ftth': isolated_others['NOOR_HS_FTTH_CUST'].sum() if not isolated_others.empty else 0,
-        'wrong_noor': isolated_others['NOOR_WRONG_VLAN'].sum() if not isolated_others.empty else 0,
-        'wrong_voda': isolated_others['VODA_WORNG_VLAN'].sum() if not isolated_others.empty else 0,
-        'wrong_orange': isolated_others['ORANGE_WORNG_VLAN'].sum() if not isolated_others.empty else 0,
-        'wrong_ets': isolated_others['ETISLAT_WRONG_VLAN'].sum() if not isolated_others.empty else 0
+        # Counts of unique MSANs by category
+        'isolated_msans': len(isolated_unique),
+        'partial_msans': len(partial_unique),
+        'path_changed_msans': len(path_changed_unique),
+        
+        # VIC counts
+        'o_partial_vic': (partial_unique['VIC'] == 'VIC').sum() if not partial_unique.empty else 0,
+        'o_iso_vic': (isolated_unique['VIC'] == 'VIC').sum() if not isolated_unique.empty else 0,
+        'o_path_changed_vic': (path_changed_unique['VIC'] == 'VIC').sum() if not path_changed_unique.empty else 0,
+        
+        # Customer totals (only counting relevant ISP/service combinations)
+        'isolated_sub': count_affected_customers(isolated_data),
+        'partial_sub': count_affected_customers(partial_data),
+        'path_changed_sub': count_affected_customers(path_changed_data),
+        
+        # Vodafone statistics (using the new counting method)
+        'isolated_voda': count_affected_customers(isolated_data[isolated_data['ISP'] == 'VODAFONE']),
+        'isolated_voda_ubb': count_affected_customers(isolated_data[(isolated_data['ISP'] == 'VODAFONE') & (isolated_data['SERVICE'] == 'UBBT')]),
+        'isolated_voda_hs': count_affected_customers(isolated_data[(isolated_data['ISP'] == 'VODAFONE') & (isolated_data['SERVICE'] == 'HS-BT')]),
+        'isolated_voda_ubb_ftth': count_affected_customers_ftth(isolated_data[(isolated_data['ISP'] == 'VODAFONE') & (isolated_data['SERVICE'] == 'UBBT')]),
+        'isolated_voda_hs_ftth': count_affected_customers_ftth(isolated_data[(isolated_data['ISP'] == 'VODAFONE') & (isolated_data['SERVICE'] == 'HS-BT')]),
+        
+        # Orange statistics
+        'isolated_orange': count_affected_customers(isolated_data[isolated_data['ISP'] == 'ORANGE']),
+        'isolated_orange_ubb': count_affected_customers(isolated_data[(isolated_data['ISP'] == 'ORANGE') & (isolated_data['SERVICE'] == 'UBBT')]),
+        'isolated_orange_hs': count_affected_customers(isolated_data[(isolated_data['ISP'] == 'ORANGE') & (isolated_data['SERVICE'] == 'HS-BT')]),
+        'isolated_orange_ubb_ftth': count_affected_customers_ftth(isolated_data[(isolated_data['ISP'] == 'ORANGE') & (isolated_data['SERVICE'] == 'UBBT')]),
+        'isolated_orange_hs_ftth': count_affected_customers_ftth(isolated_data[(isolated_data['ISP'] == 'ORANGE') & (isolated_data['SERVICE'] == 'HS-BT')]),
+        
+        # Etisalat statistics
+        'isolated_etisalat': count_affected_customers(isolated_data[isolated_data['ISP'] == 'ETISALAT']),
+        'isolated_etisalat_ubb': count_affected_customers(isolated_data[(isolated_data['ISP'] == 'ETISALAT') & (isolated_data['SERVICE'] == 'UBBT')]),
+        'isolated_etisalat_hs': count_affected_customers(isolated_data[(isolated_data['ISP'] == 'ETISALAT') & (isolated_data['SERVICE'] == 'HS-BT')]),
+        'isolated_etisalat_ubb_ftth': count_affected_customers_ftth(isolated_data[(isolated_data['ISP'] == 'ETISALAT') & (isolated_data['SERVICE'] == 'UBBT')]),
+        'isolated_etisalat_hs_ftth': count_affected_customers_ftth(isolated_data[(isolated_data['ISP'] == 'ETISALAT') & (isolated_data['SERVICE'] == 'HS-BT')]),
+        
+        # Noor statistics
+        'isolated_noor': count_affected_customers(isolated_data[isolated_data['ISP'] == 'NOOR']),
+        'isolated_noor_ubb': count_affected_customers(isolated_data[(isolated_data['ISP'] == 'NOOR') & (isolated_data['SERVICE'] == 'UBBT')]),
+        'isolated_noor_hs': count_affected_customers(isolated_data[(isolated_data['ISP'] == 'NOOR') & (isolated_data['SERVICE'] == 'HS-BT')]),
+        'isolated_noor_ubb_ftth': count_affected_customers_ftth(isolated_data[(isolated_data['ISP'] == 'NOOR') & (isolated_data['SERVICE'] == 'UBBT')]),
+        'isolated_noor_hs_ftth': count_affected_customers_ftth(isolated_data[(isolated_data['ISP'] == 'NOOR') & (isolated_data['SERVICE'] == 'HS-BT')]),
+        
+        # Wrong VLAN statistics (these are already ISP-specific, so we can sum directly)
+        'wrong_noor': isolated_data['NOOR_WRONG_VLAN'].sum() if not isolated_data.empty else 0,
+        'wrong_voda': isolated_data['VODA_WORNG_VLAN'].sum() if not isolated_data.empty else 0,
+        'wrong_orange': isolated_data['ORANGE_WORNG_VLAN'].sum() if not isolated_data.empty else 0,
+        'wrong_ets': isolated_data['ETISLAT_WRONG_VLAN'].sum() if not isolated_data.empty else 0
     }
 
 

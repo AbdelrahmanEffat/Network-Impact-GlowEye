@@ -132,7 +132,7 @@ class UnifiedNetworkImpactAnalyzer:
     def _calculate_msan_level_impact(self, results_df):
         """
         Calculate impact at MSAN level instead of record level.
-        If any record for an MSAN is 'Partially Impacted', the entire MSAN is 'Partially Impacted'
+        If any record for an MSAN is 'Path Changed', the entire MSAN is 'Path Changed'
         """
         if results_df.empty or 'MSANCODE' not in results_df.columns:
             return results_df
@@ -147,9 +147,9 @@ class UnifiedNetworkImpactAnalyzer:
         for msan in results_df['MSANCODE'].unique():
             msan_records = results_df[results_df['MSANCODE'] == msan]
             
-            # If ANY record is Partially Impacted, the entire MSAN is Partially Impacted
-            if 'Partially Impacted' in msan_records['Impact'].values:
-                msan_impact[msan] = 'Partially Impacted'
+            # If ANY record is Path Changed, the entire MSAN is Path Changed
+            if 'Path Changed' in msan_records['Impact'].values:
+                msan_impact[msan] = 'Path Changed'
             else:
                 # Check if all records are Isolated
                 if 'Isolated' in msan_records['Impact'].values:
@@ -194,11 +194,11 @@ class UnifiedNetworkImpactAnalyzer:
         # For Others data, we want to keep all records but only mark affected ones
         # The impact should already be set by the individual analysis methods
         
-        # Ensure we have 'No Impact' for records without specific impact
+        # Ensure we have 'Partial' for records without specific impact
         if 'Impact' not in results_df.columns:
-            results_df['Impact'] = 'No Impact'
+            results_df['Impact'] = 'Partial'
         else:
-            results_df['Impact'] = results_df['Impact'].fillna('No Impact')
+            results_df['Impact'] = results_df['Impact'].fillna('Partial')
         
         return results_df
 
@@ -309,7 +309,7 @@ class UnifiedNetworkImpactAnalyzer:
             )
             
             all_affected['Impact'] = all_affected['Path2'].apply(
-                lambda x: 'Partially Impacted' if isinstance(x, list) else 'Isolated'
+                lambda x: 'Path Changed' if isinstance(x, list) else 'Isolated'
             )
         else:
             # For Others data, get ALL records for the affected MSANs but only mark specific ones
@@ -329,7 +329,7 @@ class UnifiedNetworkImpactAnalyzer:
             
             # Initialize Path2 and Impact columns
             all_affected['Path2'] = None
-            all_affected['Impact'] = 'No Impact'  # Default to no impact
+            all_affected['Impact'] = 'Partial'  # Default to Partial
             
             # Calculate paths and set impact only for directly affected records
             affected_indices = all_affected[direct_impact_mask].index
@@ -337,7 +337,7 @@ class UnifiedNetworkImpactAnalyzer:
                 row = all_affected.loc[idx]
                 path2 = self.model.calculate_path(graph, row['EDGE'], row[target_hostname_col])
                 all_affected.at[idx, 'Path2'] = path2
-                all_affected.at[idx, 'Impact'] = 'Partially Impacted' if isinstance(path2, list) else 'Isolated'
+                all_affected.at[idx, 'Impact'] = 'Path Changed' if isinstance(path2, list) else 'Isolated'
         
         return all_affected
 
@@ -373,7 +373,7 @@ class UnifiedNetworkImpactAnalyzer:
                 if 'cir_type' in msan_df.columns and 'Single' in msan_df['cir_type'].values:
                     msan_impacts[msan] = 'Isolated'
                 else:
-                    msan_impacts[msan] = 'Partially Impacted'
+                    msan_impacts[msan] = 'Path Changed'
             
             all_affected['Impact'] = all_affected['MSANCODE'].map(msan_impacts)
         else:
@@ -394,7 +394,7 @@ class UnifiedNetworkImpactAnalyzer:
             
             # Initialize Path2 and Impact columns
             all_affected['Path2'] = None
-            all_affected['Impact'] = 'No Impact'  # Default to no impact
+            all_affected['Impact'] = 'Partial'  # Default to Partial
             
             # Calculate paths and set impact only for directly affected records
             affected_indices = all_affected[direct_impact_mask].index
@@ -402,7 +402,7 @@ class UnifiedNetworkImpactAnalyzer:
                 row = all_affected.loc[idx]
                 path2 = self.model.calculate_path(graph, row['EDGE'], row[target_hostname_col])
                 all_affected.at[idx, 'Path2'] = path2
-                all_affected.at[idx, 'Impact'] = 'Partially Impacted' if isinstance(path2, list) else 'Isolated'
+                all_affected.at[idx, 'Impact'] = 'Path Changed' if isinstance(path2, list) else 'Isolated'
         
         return all_affected
 
@@ -438,7 +438,7 @@ class UnifiedNetworkImpactAnalyzer:
             
             # Set impact based on path existence
             all_affected['Impact'] = all_affected['Path2'].apply(
-                lambda x: 'Partially Impacted' if isinstance(x, list) else 'Isolated'
+                lambda x: 'Path Changed' if isinstance(x, list) else 'Isolated'
             )
             
             # Apply MSAN-level impact
@@ -452,7 +452,7 @@ class UnifiedNetworkImpactAnalyzer:
             
             # Initialize Path2 and Impact columns
             all_affected['Path2'] = None
-            all_affected['Impact'] = 'No Impact'  # Default to no impact
+            all_affected['Impact'] = 'Partial'  # Default to Partial
             
             # Calculate paths and set impact only for records that have affected nodes in their paths
             for idx, row in all_affected.iterrows():
@@ -460,7 +460,7 @@ class UnifiedNetworkImpactAnalyzer:
                 if isinstance(path, list) and any(node in path[1:-1] for node in affected_nodes):
                     path2 = self.model.calculate_path(graph, row['EDGE'], row[target_hostname_col])
                     all_affected.at[idx, 'Path2'] = path2
-                    all_affected.at[idx, 'Impact'] = 'Partially Impacted' if isinstance(path2, list) else 'Isolated'
+                    all_affected.at[idx, 'Impact'] = 'Path Changed' if isinstance(path2, list) else 'Isolated'
         
         return all_affected
 
@@ -490,7 +490,7 @@ class UnifiedNetworkImpactAnalyzer:
             
             # Set impact based on path existence
             all_affected['Impact'] = all_affected['Path2'].apply(
-                lambda x: 'Partially Impacted' if isinstance(x, list) else 'Isolated'
+                lambda x: 'Path Changed' if isinstance(x, list) else 'Isolated'
             )
             
             # Apply MSAN-level impact
@@ -504,7 +504,7 @@ class UnifiedNetworkImpactAnalyzer:
             
             # Initialize Path2 and Impact columns
             all_affected['Path2'] = None
-            all_affected['Impact'] = 'No Impact'  # Default to no impact
+            all_affected['Impact'] = 'Partial'  # Default to Partial
             
             # Calculate paths and set impact only for records that have the node in their paths
             for idx, row in all_affected.iterrows():
@@ -512,7 +512,7 @@ class UnifiedNetworkImpactAnalyzer:
                 if isinstance(path, list) and dwn_node in path[1:-1]:
                     path2 = self.model.calculate_path(graph, row['EDGE'], row[target_hostname_col])
                     all_affected.at[idx, 'Path2'] = path2
-                    all_affected.at[idx, 'Impact'] = 'Partially Impacted' if isinstance(path2, list) else 'Isolated'
+                    all_affected.at[idx, 'Impact'] = 'Path Changed' if isinstance(path2, list) else 'Isolated'
         
         return all_affected
         
@@ -682,20 +682,20 @@ class UnifiedNetworkImpactAnalyzer:
         """
         Calculate Route_Status for an entire MSAN based on multiple conditions across records
         """
-        # Condition 1: Check if any UP record with Partially Impacted and valid backup path
+        # Condition 1: Check if any UP record with Path Changed and valid backup path
         condition1_records = msan_records[
             (msan_records['STATUS'] == 'UP') & 
-            (msan_records['Impact'] == 'Partially Impacted') &
+            (msan_records['Impact'] == 'Path Changed') &
             (msan_records['Path2'].apply(lambda x: (isinstance(x, (list, tuple)) and len(x) > 0)))
         ]
         
         if not condition1_records.empty:
             return 'Primary Path Active'
         
-        # Condition 2: Check ST records with Partially Impacted and valid primary path
+        # Condition 2: Check ST records with Path Changed and valid primary path
         condition2_records = msan_records[
             (msan_records['STATUS'] == 'ST') & 
-            (msan_records['Impact'] == 'Partially Impacted') &
+            (msan_records['Impact'] == 'Path Changed') &
             (msan_records['Path'].apply(lambda x: (isinstance(x, (list, tuple)) and len(x) > 0)))
         ]
         
@@ -742,12 +742,12 @@ class UnifiedNetworkImpactAnalyzer:
                     return False
             return True
         
-        # Condition 1: UP + Partially Impacted + valid backup path
-        if status == 'UP' and impact == 'Partially Impacted' and is_valid_path(path2):
+        # Condition 1: UP + Path Changed + valid backup path
+        if status == 'UP' and impact == 'Path Changed' and is_valid_path(path2):
             return 'Primary Path Active'
         
-        # Condition 2: ST + Partially Impacted + valid primary path  
-        elif status == 'ST' and impact == 'Partially Impacted' and is_valid_path(path1):
+        # Condition 2: ST + Path Changed + valid primary path  
+        elif status == 'ST' and impact == 'Path Changed' and is_valid_path(path1):
             return 'Traffic Rerouted'
         
         # Condition 3: Isolated impact
