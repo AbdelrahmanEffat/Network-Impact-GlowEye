@@ -14,9 +14,9 @@ import time
 from functools import lru_cache
 import threading
 # redis update
-from redis_utils import RedisDataManager
-from config import RedisConfig, get_production_config
-from datetime import datetime
+from backend.api.redis_utils import RedisDataManager
+from backend.api.config import RedisConfig, get_production_config
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -70,7 +70,7 @@ async def startup_event():
     with analyzer_lock:
         try:
 
-            '''
+            
             logger.info("Loading CSV files...")
             
             
@@ -110,7 +110,7 @@ async def startup_event():
                 if df_wan is None: missing.append("wan")
                 if df_agg is None: missing.append("agg")
                 raise Exception(f"Failed to load data from Redis for keys: {missing}")
-
+            '''
             ## maping columns names
             df_report_others.columns = df_report_others.columns.str.upper()
             df_report_we.columns = df_report_we.columns.str.upper()
@@ -699,7 +699,6 @@ def _create_impact_summary(results_df):
     return summary
 
 
-import numpy as np
 
 def convert_dataframe_to_serializable(df):
     """
