@@ -576,24 +576,24 @@ def _calculate_others_statistics(others_results):
             service = row['SERVICE']
             
             if isp == 'VODAFONE':
-                if service == 'UBBT':
+                if service == 'UBBT-FTTH':
                     total_ftth += row.get('VODA_UBBT_FTTH_CUST', 0)
-                elif service == 'HS-BT':
+                elif service == 'HS-BT-FTTH':
                     total_ftth += row.get('VODA_HS_FTTH_CUST', 0)
             elif isp == 'ORANGE':
-                if service == 'UBBT':
+                if service == 'UBBT-FTTH':
                     total_ftth += row.get('ORANGE_UBBT_FTTH_CUST', 0)
-                elif service == 'HS-BT':
+                elif service == 'HS-BT-FTTH':
                     total_ftth += row.get('ORANGE_HS_FTTH_CUST', 0)
             elif isp == 'ETISALAT':
-                if service == 'UBBT':
+                if service == 'UBBT-FTTH':
                     total_ftth += row.get('ETISLAT_UBBT_FTTH_CUST', 0)
-                elif service == 'HS-BT':
+                elif service == 'HS-BT-FTTH':
                     total_ftth += row.get('ETISLAT_HS_FTTH_CUST', 0)
             elif isp == 'NOOR':
-                if service == 'UBBT':
+                if service == 'UBBT-FTTH':
                     total_ftth += row.get('NOOR_UBBT_FTTH_CUST', 0)
-                elif service == 'HS-BT':
+                elif service == 'HS-BT-FTTH':
                     total_ftth += row.get('NOOR_HS_FTTH_CUST', 0)
         
         return total_ftth
@@ -619,29 +619,29 @@ def _calculate_others_statistics(others_results):
         'isolated_voda': count_affected_customers(isolated_data[isolated_data['ISP'] == 'VODAFONE']),
         'isolated_voda_ubb': count_affected_customers(isolated_data[(isolated_data['ISP'] == 'VODAFONE') & (isolated_data['SERVICE'] == 'UBBT')]),
         'isolated_voda_hs': count_affected_customers(isolated_data[(isolated_data['ISP'] == 'VODAFONE') & (isolated_data['SERVICE'] == 'HS-BT')]),
-        'isolated_voda_ubb_ftth': count_affected_customers_ftth(isolated_data[(isolated_data['ISP'] == 'VODAFONE') & (isolated_data['SERVICE'] == 'UBBT')]),
-        'isolated_voda_hs_ftth': count_affected_customers_ftth(isolated_data[(isolated_data['ISP'] == 'VODAFONE') & (isolated_data['SERVICE'] == 'HS-BT')]),
+        'isolated_voda_ubb_ftth': count_affected_customers_ftth(isolated_data[(isolated_data['ISP'] == 'VODAFONE') & (isolated_data['SERVICE'] == 'UBBT-FTTH')]),
+        'isolated_voda_hs_ftth': count_affected_customers_ftth(isolated_data[(isolated_data['ISP'] == 'VODAFONE') & (isolated_data['SERVICE'] == 'HS-BT-FTTH')]),
         
         # Orange statistics
         'isolated_orange': count_affected_customers(isolated_data[isolated_data['ISP'] == 'ORANGE']),
         'isolated_orange_ubb': count_affected_customers(isolated_data[(isolated_data['ISP'] == 'ORANGE') & (isolated_data['SERVICE'] == 'UBBT')]),
         'isolated_orange_hs': count_affected_customers(isolated_data[(isolated_data['ISP'] == 'ORANGE') & (isolated_data['SERVICE'] == 'HS-BT')]),
-        'isolated_orange_ubb_ftth': count_affected_customers_ftth(isolated_data[(isolated_data['ISP'] == 'ORANGE') & (isolated_data['SERVICE'] == 'UBBT')]),
-        'isolated_orange_hs_ftth': count_affected_customers_ftth(isolated_data[(isolated_data['ISP'] == 'ORANGE') & (isolated_data['SERVICE'] == 'HS-BT')]),
+        'isolated_orange_ubb_ftth': count_affected_customers_ftth(isolated_data[(isolated_data['ISP'] == 'ORANGE') & (isolated_data['SERVICE'] == 'UBBT-FTTH')]),
+        'isolated_orange_hs_ftth': count_affected_customers_ftth(isolated_data[(isolated_data['ISP'] == 'ORANGE') & (isolated_data['SERVICE'] == 'HS-BT-FTTH')]),
         
         # Etisalat statistics
         'isolated_etisalat': count_affected_customers(isolated_data[isolated_data['ISP'] == 'ETISALAT']),
         'isolated_etisalat_ubb': count_affected_customers(isolated_data[(isolated_data['ISP'] == 'ETISALAT') & (isolated_data['SERVICE'] == 'UBBT')]),
         'isolated_etisalat_hs': count_affected_customers(isolated_data[(isolated_data['ISP'] == 'ETISALAT') & (isolated_data['SERVICE'] == 'HS-BT')]),
-        'isolated_etisalat_ubb_ftth': count_affected_customers_ftth(isolated_data[(isolated_data['ISP'] == 'ETISALAT') & (isolated_data['SERVICE'] == 'UBBT')]),
-        'isolated_etisalat_hs_ftth': count_affected_customers_ftth(isolated_data[(isolated_data['ISP'] == 'ETISALAT') & (isolated_data['SERVICE'] == 'HS-BT')]),
+        'isolated_etisalat_ubb_ftth': count_affected_customers_ftth(isolated_data[(isolated_data['ISP'] == 'ETISALAT') & (isolated_data['SERVICE'] == 'UBBT-FTTH')]),
+        'isolated_etisalat_hs_ftth': count_affected_customers_ftth(isolated_data[(isolated_data['ISP'] == 'ETISALAT') & (isolated_data['SERVICE'] == 'HS-BT-FTTH')]),
         
         # Noor statistics
         'isolated_noor': count_affected_customers(isolated_data[isolated_data['ISP'] == 'NOOR']),
         'isolated_noor_ubb': count_affected_customers(isolated_data[(isolated_data['ISP'] == 'NOOR') & (isolated_data['SERVICE'] == 'UBBT')]),
         'isolated_noor_hs': count_affected_customers(isolated_data[(isolated_data['ISP'] == 'NOOR') & (isolated_data['SERVICE'] == 'HS-BT')]),
-        'isolated_noor_ubb_ftth': count_affected_customers_ftth(isolated_data[(isolated_data['ISP'] == 'NOOR') & (isolated_data['SERVICE'] == 'UBBT')]),
-        'isolated_noor_hs_ftth': count_affected_customers_ftth(isolated_data[(isolated_data['ISP'] == 'NOOR') & (isolated_data['SERVICE'] == 'HS-BT')]),
+        'isolated_noor_ubb_ftth': count_affected_customers_ftth(isolated_data[(isolated_data['ISP'] == 'NOOR') & (isolated_data['SERVICE'] == 'UBBT-FTTH')]),
+        'isolated_noor_hs_ftth': count_affected_customers_ftth(isolated_data[(isolated_data['ISP'] == 'NOOR') & (isolated_data['SERVICE'] == 'HS-BT-FTTH')]),
         
         # Wrong VLAN statistics (these are already ISP-specific, so we can sum directly)
         'wrong_noor': isolated_data['NOOR_WRONG_VLAN'].sum() if not isolated_data.empty else 0,
