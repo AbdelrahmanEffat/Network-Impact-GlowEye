@@ -905,6 +905,7 @@ class UnifiedCIRModel:
     def _process_paths(self, dfx, column):
         """Process paths and remove duplicates"""
         path_backup = dfx[column].copy()
+        dfx.replace({np.nan: None}, inplace=True)
         dfx[column] = dfx[column].apply(lambda x: json.dumps(x) if isinstance(x, list) else str(x))
         dfx = dfx.drop_duplicates()
         dfx[column] = dfx.index.map(path_backup)
