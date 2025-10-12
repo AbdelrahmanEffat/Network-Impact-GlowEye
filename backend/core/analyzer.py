@@ -207,6 +207,9 @@ class UnifiedNetworkImpactAnalyzer:
         if self.final_df is None:
             raise ValueError("Must call generate_base_results() first")
         
+        # Debug: Check which nodes are being identified for this exchange
+        self.debug_exchange_nodes(dwn_exchange)
+        
         results = []
         
         # Case 1: Edge Exchange directly impacted
@@ -280,6 +283,7 @@ class UnifiedNetworkImpactAnalyzer:
             impact_df['Impact'] = impact_type
         return impact_df
     
+
     def _analyze_target_exchange_impact(self, dwn_exchange):
         """Analyze direct impact on target exchange (AGG/Bitstream) - fixed to keep all MSAN records"""
         target_exchange_col = self.column_map['target_exchange']
@@ -412,8 +416,29 @@ class UnifiedNetworkImpactAnalyzer:
         affected_nodes = self._get_exchange_nodes(dwn_exchange)
         
         if not affected_nodes:
+            print(f"No nodes found for exchange {dwn_exchange}")
             return pd.DataFrame()
         
+        print(f"Analyzing physical path impact for {len(affected_nodes)} nodes in {dwn_exchange}")
+
+        # Find records with affected nodes in their paths - MORE PRECISE
+        affected_msans = set()
+        
+        for idx, row in self.final_df.iterrows():
+            path = row['Path']
+            if isinstance(path, list) and len(path) >= 3:
+                # Check if any affected node appears in the middle of the path (not endpoints)
+                for node in affected_nodes:
+                    if node in path[1:-1]:  # Exclude first and last elements (EDGE and target)
+                        affected_msans.add(row['MSANCODE'])
+                        break
+        
+        if not affected_msans:
+            print(f"No MSANs found with {dwn_exchange} nodes in their paths")
+            return pd.DataFrame()
+        
+        print(f"Found {len(affected_msans)} affected MSANs: {list(affected_msans)}")
+
         # Find records with affected nodes in their paths
         affected_records = self._find_records_with_nodes_in_path(affected_nodes)
         
@@ -463,6 +488,7 @@ class UnifiedNetworkImpactAnalyzer:
                     all_affected.at[idx, 'Impact'] = 'Path Changed' if isinstance(path2, list) else 'Isolated'
         
         return all_affected
+    
 
     def _analyze_node_physical_path_impact(self, dwn_node):
         """Analyze physical path impact for node failure - fixed to keep all MSAN records"""
@@ -517,17 +543,17 @@ class UnifiedNetworkImpactAnalyzer:
         return all_affected
         
 
-    
+    # Returniung all nodes in the exchange - FIXED VERSION, Case 'MEETGHAMR1...DK' '07-1-10-36'
     def _get_exchange_nodes(self, dwn_exchange):
-        """Get all nodes belonging to a specific exchange - enhanced version"""
-        # Extract exchange code from exchange name
+        """Get all nodes belonging to a specific exchange - FIXED VERSION"""
+        # Extract exchange code from exchange name more precisely
         exchange_code = dwn_exchange.split('.')[-1] if '.' in dwn_exchange else dwn_exchange
         
         edge_exchange_col = self.column_map['edge_exchange']
         target_exchange_col = self.column_map['target_exchange']
         target_hostname_col = self.column_map['target_hostname']
         
-        # Find all nodes in the exchange from various sources
+        # Find all nodes in the exchange from various sources - MORE PRECISE FILTERING
         edge_nodes = self.final_df[
             self.final_df[edge_exchange_col] == dwn_exchange
         ]['EDGE'].unique().tolist()
@@ -536,36 +562,108 @@ class UnifiedNetworkImpactAnalyzer:
             self.final_df[target_exchange_col] == dwn_exchange
         ][target_hostname_col].unique().tolist()
         
-        # Also check WAN data for nodes in this exchange
+        # Also check WAN data for nodes in this exchange - WITH BETTER FILTERING
         wan_nodes_in_exchange = []
         if hasattr(self, 'df_wan') and self.df_wan is not None:
-            # Look for nodes that have the exchange code in their name
-            wan_nodes_in_exchange = self.df_wan[
-                self.df_wan['NODENAME'].str.contains(exchange_code, na=False)
-            ]['NODENAME'].unique().tolist()
+            # Look for nodes that have the exact exchange code in their name
+            # Using more precise pattern matching
+            for node in self.df_wan['NODENAME'].dropna().unique():
+                if self._is_node_in_exchange(node, exchange_code, dwn_exchange):
+                    wan_nodes_in_exchange.append(node)
             
-            wan_neighbors_in_exchange = self.df_wan[
-                self.df_wan['NEIGHBOR_HOSTNAME'].str.contains(exchange_code, na=False)
-            ]['NEIGHBOR_HOSTNAME'].unique().tolist()
-            
-            wan_nodes_in_exchange.extend(wan_neighbors_in_exchange)
+            for node in self.df_wan['NEIGHBOR_HOSTNAME'].dropna().unique():
+                if self._is_node_in_exchange(node, exchange_code, dwn_exchange):
+                    wan_nodes_in_exchange.append(node)
         
         # Combine and deduplicate all nodes
         all_nodes = list(set(edge_nodes + target_nodes + wan_nodes_in_exchange))
         
-        # Filter nodes that actually belong to the exchange based on naming convention
-        exchange_nodes = [
-            node for node in all_nodes 
-            if node and (
-                # Check if node follows the naming convention and contains exchange code
-                (len(node.split('-')) > 2 and node.split('-')[2] == exchange_code) or
-                # Or if the node name contains the exchange code
-                exchange_code in node
-            )
-        ]
+        print(f"Found {len(all_nodes)} nodes in exchange {dwn_exchange}: {all_nodes}")
+        return all_nodes
+
+    def _is_node_in_exchange(self, node, exchange_code, full_exchange_name):
+        """Helper method to precisely determine if a node belongs to an exchange"""
+        if not isinstance(node, str):
+            return False
         
-        print(f"Found {len(exchange_nodes)} nodes in exchange {dwn_exchange}")#: {exchange_nodes}
-        return exchange_nodes
+        # Method 1: Check if node name contains the full exchange name (most reliable)
+        if full_exchange_name.replace('.', '').upper() in node.upper():
+            return True
+        
+        # Method 2: Check naming convention with exchange code
+        node_parts = node.split('-')
+        if len(node_parts) >= 3:
+            # Check if the third part matches the exchange code
+            if node_parts[2] == exchange_code:
+                return True
+        
+        # Method 3: Check for exchange code with proper context (avoid partial matches)
+        # Only match if exchange code appears as a standalone part or with proper separators
+        import re
+        pattern = r'(^|[-_\.])' + re.escape(exchange_code) + r'($|[-_\.])'
+        if re.search(pattern, node, re.IGNORECASE):
+            return True
+        
+        return False
+    
+    def debug_exchange_nodes(self, dwn_exchange):
+        """Debug method to trace why nodes are being included in exchange"""
+        exchange_code = dwn_exchange.split('.')[-1] if '.' in dwn_exchange else dwn_exchange
+        
+        print(f"\n=== DEBUGGING EXCHANGE: {dwn_exchange} (code: {exchange_code}) ===")
+        
+        edge_exchange_col = self.column_map['edge_exchange']
+        target_exchange_col = self.column_map['target_exchange']
+        
+        # Check edge nodes
+        edge_nodes = self.final_df[
+            self.final_df[edge_exchange_col] == dwn_exchange
+        ]['EDGE'].unique()
+        print(f"Direct edge nodes: {list(edge_nodes)}")
+        
+        # Check target nodes  
+        target_hostname_col = self.column_map['target_hostname']
+        target_nodes = self.final_df[
+            self.final_df[target_exchange_col] == dwn_exchange
+        ][target_hostname_col].unique()
+        print(f"Direct target nodes: {list(target_nodes)}")
+        
+        # Check WAN data
+        if hasattr(self, 'df_wan') and self.df_wan is not None:
+            wan_nodes = []
+            for node in self.df_wan['NODENAME'].dropna().unique():
+                if exchange_code in node:
+                    wan_nodes.append(node)
+            print(f"WAN nodes containing '{exchange_code}': {wan_nodes}")
+        
+        print("=== END DEBUG ===\n")
+
+    # Add this temporary test method to debug your specific case
+    def debug_specific_msan(self, msan_code, dwn_exchange):
+        """Debug why a specific MSAN is being included"""
+        msan_data = self.final_df[self.final_df['MSANCODE'] == msan_code]
+        if msan_data.empty:
+            print(f"MSAN {msan_code} not found in data")
+            return
+        
+        print(f"\n=== DEBUGGING MSAN {msan_code} for exchange {dwn_exchange} ===")
+        
+        for idx, row in msan_data.iterrows():
+            path = row['Path']
+            edge_exchange = row.get(self.column_map['edge_exchange'])
+            target_exchange = row.get(self.column_map['target_exchange'])
+            
+            print(f"Record {idx}:")
+            print(f"  EDGE: {row['EDGE']}, EDGE Exchange: {edge_exchange}")
+            print(f"  Target: {row.get(self.column_map['target_hostname'])}, Target Exchange: {target_exchange}")
+            print(f"  Path: {path}")
+            
+            # Check if any Tanta nodes in path
+            if isinstance(path, list):
+                tanta_nodes_in_path = [node for node in path if 'TANTA' in node or 'GH' in node]
+                print(f"  Tanta-related nodes in path: {tanta_nodes_in_path}")
+        
+        print("=== END MSAN DEBUG ===\n")
     
     def _find_msans_with_nodes_in_path(self, affected_nodes):
         """Find MSANs that have any of the affected nodes in their paths"""
