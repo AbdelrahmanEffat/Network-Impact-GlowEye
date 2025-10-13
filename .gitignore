@@ -1,0 +1,6 @@
+# Ignore a specific file
+secrets.env
+
+#Ignore data folder
+backend/data/
+statistics-api/impact_analysis_results/
