@@ -41,6 +41,8 @@ class UnifiedNetworkImpactAnalyzer:
         self.final_df = None
         self.data_type = self._detect_data_type()
         self.column_map = self._get_column_mappings()
+        # Add cache for exchange nodes ot solve performance issue
+        self._exchange_nodes_cache = {}
         
         print(f"Detected data type: {self.data_type}")
         
@@ -207,8 +209,11 @@ class UnifiedNetworkImpactAnalyzer:
         if self.final_df is None:
             raise ValueError("Must call generate_base_results() first")
         
-        # Debug: Check which nodes are being identified for this exchange
-        self.debug_exchange_nodes(dwn_exchange)
+        # Get exchange nodes ONCE and cache them
+        affected_nodes = self._get_exchange_nodes(dwn_exchange)
+        
+        # Create graph ONCE for this entire analysis
+        graph = self.model.draw_graph(excluded_nodes=affected_nodes)
         
         results = []
         
@@ -218,13 +223,13 @@ class UnifiedNetworkImpactAnalyzer:
         if not edge_impact.empty:
             results.append(edge_impact)
             
-        # Case 2: Target Exchange directly impacted (AGG/Bitstream)
-        target_impact = self._analyze_target_exchange_impact(dwn_exchange)
+        # Case 2: Target Exchange directly impacted - USE OPTIMIZED VERSION
+        target_impact = self._analyze_target_exchange_impact_optimized(dwn_exchange, affected_nodes, graph)
         if not target_impact.empty:
             results.append(target_impact)
             
-        # Case 3: Physical path impact
-        physical_impact = self._analyze_exchange_physical_path_impact(dwn_exchange)
+        # Case 3: Physical path impact - USE OPTIMIZED VERSION
+        physical_impact = self._analyze_exchange_physical_path_impact_optimized(dwn_exchange, affected_nodes, graph)
         if not physical_impact.empty:
             results.append(physical_impact)
             
@@ -240,6 +245,7 @@ class UnifiedNetworkImpactAnalyzer:
                 combined_results = self._calculate_impact_for_others(combined_results)
         
         return combined_results
+    
 
     def analyze_node_impact(self, dwn_node):
         """Analyze impact when a node fails - with correct logic for Others data"""
@@ -284,8 +290,8 @@ class UnifiedNetworkImpactAnalyzer:
         return impact_df
     
 
-    def _analyze_target_exchange_impact(self, dwn_exchange):
-        """Analyze direct impact on target exchange (AGG/Bitstream) - fixed to keep all MSAN records"""
+    def _analyze_target_exchange_impact_optimized(self, dwn_exchange, affected_nodes, graph):
+        """Optimized version that uses precomputed graph and nodes - FULL VERSION"""
         target_exchange_col = self.column_map['target_exchange']
         target_hostname_col = self.column_map['target_hostname']
         
@@ -301,12 +307,7 @@ class UnifiedNetworkImpactAnalyzer:
                 self.final_df.MSANCODE.isin(direct_impact.MSANCODE.unique())
             ].copy()
             
-            # Get ALL nodes in the affected exchange
-            affected_nodes = self._get_exchange_nodes(dwn_exchange)
-            
-            # Calculate alternative paths
-            graph = self.model.draw_graph(excluded_nodes=affected_nodes)
-            
+            # Use the precomputed graph (no need to create new one)
             all_affected['Path2'] = all_affected.apply(
                 lambda row: self.model.calculate_path(graph, row['EDGE'], row[target_hostname_col]),
                 axis=1
@@ -322,12 +323,6 @@ class UnifiedNetworkImpactAnalyzer:
                 self.final_df.MSANCODE.isin(affected_msans)
             ].copy()
             
-            # Get ALL nodes in the affected exchange
-            affected_nodes = self._get_exchange_nodes(dwn_exchange)
-            
-            # Calculate alternative paths ONLY for the directly affected records
-            graph = self.model.draw_graph(excluded_nodes=affected_nodes)
-            
             # Create a mask for directly affected records
             direct_impact_mask = all_affected[target_exchange_col] == dwn_exchange
             
@@ -336,6 +331,7 @@ class UnifiedNetworkImpactAnalyzer:
             all_affected['Impact'] = 'Partial'  # Default to Partial
             
             # Calculate paths and set impact only for directly affected records
+            # USING THE PRECOMPUTED GRAPH
             affected_indices = all_affected[direct_impact_mask].index
             for idx in affected_indices:
                 row = all_affected.loc[idx]
@@ -410,43 +406,15 @@ class UnifiedNetworkImpactAnalyzer:
         
         return all_affected
 
-    def _analyze_exchange_physical_path_impact(self, dwn_exchange):
-        """Analyze physical path impact for exchange failure - fixed to keep all MSAN records"""
-        # Get nodes in the affected exchange
-        affected_nodes = self._get_exchange_nodes(dwn_exchange)
-        
-        if not affected_nodes:
-            print(f"No nodes found for exchange {dwn_exchange}")
-            return pd.DataFrame()
-        
-        print(f"Analyzing physical path impact for {len(affected_nodes)} nodes in {dwn_exchange}")
-
-        # Find records with affected nodes in their paths - MORE PRECISE
-        affected_msans = set()
-        
-        for idx, row in self.final_df.iterrows():
-            path = row['Path']
-            if isinstance(path, list) and len(path) >= 3:
-                # Check if any affected node appears in the middle of the path (not endpoints)
-                for node in affected_nodes:
-                    if node in path[1:-1]:  # Exclude first and last elements (EDGE and target)
-                        affected_msans.add(row['MSANCODE'])
-                        break
-        
-        if not affected_msans:
-            print(f"No MSANs found with {dwn_exchange} nodes in their paths")
-            return pd.DataFrame()
-        
-        print(f"Found {len(affected_msans)} affected MSANs: {list(affected_msans)}")
-
+    def _analyze_exchange_physical_path_impact_optimized(self, dwn_exchange, affected_nodes, graph):
+        """Analyze physical path impact for exchange failure - OPTIMIZED FULL VERSION"""
         # Find records with affected nodes in their paths
         affected_records = self._find_records_with_nodes_in_path(affected_nodes)
         
         if affected_records.empty:
             return pd.DataFrame()
         
-        # Calculate alternative paths
-        graph = self.model.draw_graph(excluded_nodes=affected_nodes)
+        # Use the precomputed graph (no need to create new one)
         target_hostname_col = self.column_map['target_hostname']
         
         if self.data_type == 'network':
@@ -456,6 +424,7 @@ class UnifiedNetworkImpactAnalyzer:
                 self.final_df.MSANCODE.isin(affected_msans)
             ].copy()
             
+            # Use precomputed graph for path calculation
             all_affected['Path2'] = all_affected.apply(
                 lambda row: self.model.calculate_path(graph, row['EDGE'], row[target_hostname_col]),
                 axis=1
@@ -480,6 +449,7 @@ class UnifiedNetworkImpactAnalyzer:
             all_affected['Impact'] = 'Partial'  # Default to Partial
             
             # Calculate paths and set impact only for records that have affected nodes in their paths
+            # USING THE PRECOMPUTED GRAPH
             for idx, row in all_affected.iterrows():
                 path = row['Path']
                 if isinstance(path, list) and any(node in path[1:-1] for node in affected_nodes):
@@ -545,7 +515,12 @@ class UnifiedNetworkImpactAnalyzer:
 
     # Returniung all nodes in the exchange - FIXED VERSION, Case 'MEETGHAMR1...DK' '07-1-10-36'
     def _get_exchange_nodes(self, dwn_exchange):
-        """Get all nodes belonging to a specific exchange - FIXED VERSION"""
+        """Get all nodes belonging to a specific exchange - FIXED VERSION - WITH CACHING"""
+
+        # Check cache first
+        if dwn_exchange in self._exchange_nodes_cache:
+            return self._exchange_nodes_cache[dwn_exchange]
+
         # Extract exchange code from exchange name more precisely
         exchange_code = dwn_exchange.split('.')[-1] if '.' in dwn_exchange else dwn_exchange
         
@@ -579,6 +554,10 @@ class UnifiedNetworkImpactAnalyzer:
         all_nodes = list(set(edge_nodes + target_nodes + wan_nodes_in_exchange))
         
         print(f"Found {len(all_nodes)} nodes in exchange {dwn_exchange}: {all_nodes}")
+
+        # Cache the result
+        self._exchange_nodes_cache[dwn_exchange] = all_nodes
+
         return all_nodes
 
     def _is_node_in_exchange(self, node, exchange_code, full_exchange_name):

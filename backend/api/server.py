@@ -181,11 +181,11 @@ async def analyze_network_impact_complete(request: AnalysisRequest):
         logger.info(f"Starting complete analysis for {request.identifier}")
         start_time = time.time()
         
-        # Clear cache before new analysis
-        if hasattr(we_analyzer, 'clear_cache'):
-            we_analyzer.clear_cache()
-        if hasattr(others_analyzer, 'clear_cache'):
-            others_analyzer.clear_cache()
+        # Clear caches before new analysis
+        if hasattr(we_analyzer, '_exchange_nodes_cache'):
+            we_analyzer._exchange_nodes_cache.clear()
+        if hasattr(others_analyzer, '_exchange_nodes_cache'):
+            others_analyzer._exchange_nodes_cache.clear()
         
         # Use precomputed base results
         we_analyzer.final_df = we_base_results
@@ -202,6 +202,13 @@ async def analyze_network_impact_complete(request: AnalysisRequest):
             analysis_type = "Node"
         
         execution_time = time.time() - start_time
+        
+        # Print performance statistics
+        print(f"Analysis completed in {execution_time:.2f} seconds")
+        if hasattr(we_analyzer, 'print_method_stats'):
+            we_analyzer.print_method_stats()
+        if hasattr(others_analyzer, 'print_method_stats'):
+            others_analyzer.print_method_stats()
         
         # Apply MSAN-level Route_Status calculation for WE data
         if not we_results.empty:
