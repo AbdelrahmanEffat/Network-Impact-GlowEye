@@ -102,7 +102,7 @@ async def startup_event():
                 df_report_we = redis_manager.get_dataframe("we")
                 df_report_others = redis_manager.get_dataframe("others")
                 df_res_ospf = redis_manager.get_dataframe("res_ospf")
-                df_wan = redis_manager.get_dataframe("wan")
+                df_wan = redis_manager.get_dataframe("wanData")
                 df_agg = redis_manager.get_dataframe("agg")
                 
                 # Log which keys we're using
