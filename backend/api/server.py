@@ -82,7 +82,7 @@ async def startup_event():
             
             if value=='false':
 
-                data_path = r"C:\Users\amr.emadeldeen\Desktop\Network-Impact-Analyzer-main\Network-Impact-GlowEye\backend\data"
+                data_path = r"C:\Users\secre\OneDrive\Desktop\network-impact-analysis\backend\data"
                 
                 # Load your CSV files
                 df_report_we = pd.read_csv(f'{data_path}\\we.csv')  # WE data
@@ -218,6 +218,12 @@ async def analyze_network_impact_complete(request: AnalysisRequest):
         if hasattr(others_analyzer, 'print_method_stats'):
             others_analyzer.print_method_stats()
         
+        # FIX: Ensure Path2 column exists for both datasets
+        if not we_results.empty and 'Path2' not in we_results.columns:
+            we_results['Path2'] = None
+        if not others_results.empty and 'Path2' not in others_results.columns:
+            others_results['Path2'] = None
+        
         # Apply MSAN-level Route_Status calculation for WE data
         if not we_results.empty:
             we_results = we_analyzer._calculate_msan_level_route_status(we_results)
@@ -226,10 +232,14 @@ async def analyze_network_impact_complete(request: AnalysisRequest):
         if not others_results.empty:
             others_results['Route_Status'] = others_results.apply(
                 lambda row: others_analyzer._calculate_route_status_individual(
-                    row['Path'], row['Path2'], row.get('STATUS', 'UP'), row['Impact']
+                    row['Path'], 
+                    row['Path2'] if 'Path2' in row else None,  # Safe access to Path2
+                    row.get('STATUS', 'UP'), 
+                    row['Impact']
                 ),
                 axis=1
             )
+        
         
         # Create summaries
         we_impact_summary = _create_impact_summary(we_results)
