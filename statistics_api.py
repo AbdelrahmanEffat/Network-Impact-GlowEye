@@ -6,10 +6,23 @@ import logging
 import time
 import threading
 from backend.core.analyzer import UnifiedNetworkImpactAnalyzer
+# redis update
+from backend.api.redis_utils import RedisDataManager
+from backend.api.config import RedisConfig, get_production_config
+import os
+from dotenv import load_dotenv
+from pathlib import Path
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Initialize Redis manager with environment variables
+try:
+    redis_manager = RedisDataManager(config=get_production_config())
+except Exception as e:
+    logger.error(f"Failed to initialize Redis manager: {str(e)}")
+    redis_manager = None
 
 # Request/Response Models
 class StatsRequest(BaseModel):
@@ -449,16 +462,59 @@ async def startup_event():
     
     with analyzer_lock:
         try:
+            env_path = Path(__file__).resolve().parents[0] / 'secrets.env'
+            load_dotenv(dotenv_path=env_path)
+
+            # Debug: Check if file exists
+            if env_path.exists():
+                print(f"Found secrets.env at: {env_path}")
+            else:
+                print(f"secrets.env not found at: {env_path}")
+
+            # Now you can access the environment variables
+            value = os.getenv('PRODUCTION')
+            print(f"Value: '{value}'")
+            
             logger.info("Loading CSV files...")
             
-            # Load CSV files
-            data_path = r"C:\Users\secre\OneDrive\Desktop\network-impact-analysis\backend\data"
+            if value=='false':
+
+                data_path = r"C:\Users\secre\OneDrive\Desktop\network-impact-analysis\backend\data"
+                
+                # Load your CSV files
+                df_report_we = pd.read_csv(f'{data_path}\\we.csv')  # WE data
+                df_report_others = pd.read_csv(f'{data_path}\\others.csv')  # Others data
+                df_res_ospf = pd.read_csv(f'{data_path}\\res_ospf.csv')
+                df_wan = pd.read_csv(f'{data_path}\\wan.csv')
+                df_agg = pd.read_csv(f'{data_path}\\agg.csv')
+            else:    
+
+                logger.info("Loading data from Redis cache with date-based keys...")
             
-            df_report_we = pd.read_csv(f'{data_path}\\we.csv')
-            df_report_others = pd.read_csv(f'{data_path}\\others.csv')
-            df_res_ospf = pd.read_csv(f'{data_path}\\res_ospf.csv')
-            df_wan = pd.read_csv(f'{data_path}\\wan.csv')
-            df_agg = pd.read_csv(f'{data_path}\\agg.csv')
+                # Check Redis connection
+                if not redis_manager.health_check():
+                    raise Exception("Redis connection failed")
+                
+                # Load data from Redis using date-based keys
+                df_report_we = redis_manager.get_dataframe("we")
+                df_report_others = redis_manager.get_dataframe("others")
+                df_res_ospf = redis_manager.get_dataframe("res_ospf")
+                df_wan = redis_manager.get_dataframe("wanData")
+                df_agg = redis_manager.get_dataframe("agg")
+                
+                # Log which keys we're using
+                logger.info(f"Using Redis keys: we={redis_manager.get_latest_key('we')}, "
+                        f"others={redis_manager.get_latest_key('others')}")
+                
+                # Validate that all data was loaded
+                if any(df is None for df in [df_report_we, df_report_others, df_res_ospf, df_wan, df_agg]):
+                    missing = []
+                    if df_report_we is None: missing.append("we")
+                    if df_report_others is None: missing.append("others")
+                    if df_res_ospf is None: missing.append("res_ospf")
+                    if df_wan is None: missing.append("wan")
+                    if df_agg is None: missing.append("agg")
+                    raise Exception(f"Failed to load data from Redis for keys: {missing}")
             
             # Normalize column names
             df_report_others.columns = df_report_others.columns.str.upper()
