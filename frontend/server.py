@@ -10,12 +10,19 @@ import io
 import zipfile
 import os
 from pathlib import Path
+from dotenv import load_dotenv
 
 app = FastAPI(
     title="Network Impact Analysis Web Interface",
     description="Web interface for visualizing network impact analysis results",
     version="2.0.0"
 )
+
+env_path = Path(__file__).resolve().parents[0] / 'secrets.env'
+load_dotenv(dotenv_path=env_path)
+
+# Now you can access the environment variables
+
 
 # Get the current directory of this file
 current_dir = Path(__file__).parent
@@ -29,7 +36,9 @@ templates_dir = current_dir / "templates"
 templates = Jinja2Templates(directory=templates_dir)
 
 # Configuration - update with your API URL
-API_BASE_URL = "http://localhost:8000"
+print("directory", Path(__file__).resolve())
+print(os.getenv('BACKEND_API'))
+API_BASE_URL = os.getenv('BACKEND_API') # "http://localhost:8000"
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
@@ -142,4 +151,4 @@ async def get_detailed_data(identifier, identifier_type, data_type):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    uvicorn.run(app, host="0.0.0.0", port=os.getenv('PORT'))
