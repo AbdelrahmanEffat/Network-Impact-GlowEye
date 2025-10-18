@@ -462,7 +462,7 @@ async def startup_event():
     
     with analyzer_lock:
         try:
-            env_path = Path(__file__).resolve().parents[0] / 'secrets.env'
+            env_path = Path(__file__).resolve().parents[1] / 'secrets.env'
             load_dotenv(dotenv_path=env_path)
 
             # Debug: Check if file exists
@@ -473,14 +473,13 @@ async def startup_event():
 
             # Now you can access the environment variables
             value = os.getenv('PRODUCTION')
-            print(f"Value: '{value}'")
+            data_path = os.getenv('DATA_PATH')
             
-            logger.info("Loading CSV files...")
+            logger.info(f"Loading CSV files from: {data_path}, and PRODUCTION={value}")
             
             if value=='false':
+                logger.info("Loading data from Local Environment...")
 
-                data_path = r"C:\Users\secre\OneDrive\Desktop\network-impact-analysis\backend\data"
-                
                 # Load your CSV files
                 df_report_we = pd.read_csv(f'{data_path}\\we.csv')  # WE data
                 df_report_others = pd.read_csv(f'{data_path}\\others.csv')  # Others data
@@ -489,32 +488,13 @@ async def startup_event():
                 df_agg = pd.read_csv(f'{data_path}\\agg.csv')
             else:    
 
-                logger.info("Loading data from Redis cache with date-based keys...")
-            
-                # Check Redis connection
-                if not redis_manager.health_check():
-                    raise Exception("Redis connection failed")
+                logger.info("Loading data from Production...")
                 
-                # Load data from Redis using date-based keys
-                df_report_we = redis_manager.get_dataframe("we")
-                df_report_others = redis_manager.get_dataframe("others")
-                df_res_ospf = redis_manager.get_dataframe("res_ospf")
-                df_wan = redis_manager.get_dataframe("wanData")
-                df_agg = redis_manager.get_dataframe("agg")
-                
-                # Log which keys we're using
-                logger.info(f"Using Redis keys: we={redis_manager.get_latest_key('we')}, "
-                        f"others={redis_manager.get_latest_key('others')}")
-                
-                # Validate that all data was loaded
-                if any(df is None for df in [df_report_we, df_report_others, df_res_ospf, df_wan, df_agg]):
-                    missing = []
-                    if df_report_we is None: missing.append("we")
-                    if df_report_others is None: missing.append("others")
-                    if df_res_ospf is None: missing.append("res_ospf")
-                    if df_wan is None: missing.append("wan")
-                    if df_agg is None: missing.append("agg")
-                    raise Exception(f"Failed to load data from Redis for keys: {missing}")
+                df_report_we = pd.read_csv(f'{data_path}/we.csv')  # WE data
+                df_report_others = pd.read_csv(f'{data_path}/others.csv')  # Others data
+                df_res_ospf = pd.read_csv(f'{data_path}/res_ospf.csv')
+                df_wan = pd.read_csv(f'{data_path}/wan.csv')
+                df_agg = pd.read_csv(f'{data_path}/agg.csv')
             
             # Normalize column names
             df_report_others.columns = df_report_others.columns.str.upper()
@@ -631,6 +611,6 @@ if __name__ == "__main__":
     uvicorn.run(
         "statistics_api:app",
         host="0.0.0.0",
-        port=8002,
+        port=4402,
         reload=True
     )
