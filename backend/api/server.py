@@ -89,11 +89,11 @@ async def startup_event():
                 df_agg = pd.read_csv(f'{data_path}\\agg.csv')
             else:
                 # Load CSV files using the path from env
-                df_report_we = pd.read_csv(data_path / 'we.csv')
-                df_report_others = pd.read_csv(data_path / 'others.csv')
-                df_res_ospf = pd.read_csv(data_path / 'res_ospf.csv')
-                df_wan = pd.read_csv(data_path / 'wan.csv')
-                df_agg = pd.read_csv(data_path / 'agg.csv')
+                df_report_we = pd.read_csv(f'{data_path}/we.csv')  # WE data
+                df_report_others = pd.read_csv(f'{data_path}/others.csv')  # Others data
+                df_res_ospf = pd.read_csv(f'{data_path}/res_ospf.csv')
+                df_wan = pd.read_csv(f'{data_path}/wan.csv')
+                df_agg = pd.read_csv(f'{data_path}/agg.csv')
                 
             ## maping columns names
             df_report_others.columns = df_report_others.columns.str.upper()

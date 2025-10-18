@@ -38,6 +38,7 @@ templates = Jinja2Templates(directory=templates_dir)
 # Configuration - update with your API URL
 print("directory", Path(__file__).resolve())
 print(os.getenv('BACKEND_API'))
+print(os.getenv('PORT'))
 API_BASE_URL = os.getenv('BACKEND_API') # "http://localhost:8000"
 
 @app.get("/", response_class=HTMLResponse)
@@ -151,4 +152,4 @@ async def get_detailed_data(identifier, identifier_type, data_type):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=os.getenv('PORT'))
+    uvicorn.run(app, host="0.0.0.0", port=4401)
