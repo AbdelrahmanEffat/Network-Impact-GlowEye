@@ -291,7 +291,10 @@ class NetworkDashboard {
             .attr('r', 12)
             .attr('fill', d => {
                 const isFailed = this.isFailedNode(d.id);
-                return isFailed ? '#ff0000' : '#2196F3';
+                const isEdge = this.isEdgeNode(d.id);
+                if (isFailed) return '#ff0000';
+                if (isEdge) return '#4CAF50';
+                return '#2196F3';
             })
             .attr('stroke', d => this.isFailedNode(d.id) ? '#ff0000' : '#fff')
             .attr('stroke-width', d => this.isFailedNode(d.id) ? 3 : 2)
@@ -362,11 +365,38 @@ class NetworkDashboard {
         return isFailed;
     }
 
+    isEdgeNode(nodeId) {
+        if (!nodeId || !this.weData) {
+            return false;
+        }
+        
+        // Normalize strings for comparison
+        const normalize = (str) => {
+            return String(str).toLowerCase().trim().replace(/\s+/g, '');
+        };
+        
+        const normalizedNode = normalize(nodeId);
+        
+        // Check each record to see if this node is the first in any primary path
+        for (const record of this.weData) {
+            const primaryPath = this.parsePath(record.Path);
+            if (primaryPath.length > 0) {
+                const firstNode = normalize(primaryPath[0]);
+                if (firstNode === normalizedNode) {
+                    return true;
+                }
+            }
+        }
+        
+        return false;
+    }
+
     addLegend(svg) {
         const legend = svg.append('g')
             .attr('class', 'legend')
             .attr('transform', 'translate(20, 20)');
 
+        // Primary path legend
         legend.append('line')
             .attr('x1', 0).attr('y1', 0)
             .attr('x2', 20).attr('y2', 0)
@@ -379,6 +409,7 @@ class NetworkDashboard {
             .attr('font-size', '12px')
             .attr('font-family', 'Arial, sans-serif');
 
+        // Backup path legend
         legend.append('line')
             .attr('x1', 0).attr('y1', 20)
             .attr('x2', 20).attr('y2', 20)
@@ -392,8 +423,23 @@ class NetworkDashboard {
             .attr('font-size', '12px')
             .attr('font-family', 'Arial, sans-serif');
 
+        // Edge node legend (NEW)
         legend.append('circle')
             .attr('cx', 10).attr('cy', 45)
+            .attr('r', 6)
+            .attr('fill', '#4CAF50')
+            .attr('stroke', '#fff')
+            .attr('stroke-width', 1);
+
+        legend.append('text')
+            .text('Edge Node')
+            .attr('x', 25).attr('y', 50)
+            .attr('font-size', '12px')
+            .attr('font-family', 'Arial, sans-serif');
+
+        // Failed node legend
+        legend.append('circle')
+            .attr('cx', 10).attr('cy', 65)
             .attr('r', 6)
             .attr('fill', '#ff0000')
             .attr('stroke', '#fff')
@@ -401,12 +447,13 @@ class NetworkDashboard {
 
         legend.append('text')
             .text('Failed Node')
-            .attr('x', 25).attr('y', 50)
+            .attr('x', 25).attr('y', 70)
             .attr('font-size', '12px')
             .attr('font-family', 'Arial, sans-serif');
 
+        // Normal node legend
         legend.append('circle')
-            .attr('cx', 10).attr('cy', 65)
+            .attr('cx', 10).attr('cy', 85)
             .attr('r', 6)
             .attr('fill', '#2196F3')
             .attr('stroke', '#fff')
@@ -414,7 +461,7 @@ class NetworkDashboard {
 
         legend.append('text')
             .text('Normal Node')
-            .attr('x', 25).attr('y', 70)
+            .attr('x', 25).attr('y', 90)
             .attr('font-size', '12px')
             .attr('font-family', 'Arial, sans-serif');
     }
