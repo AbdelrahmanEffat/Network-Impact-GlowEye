@@ -136,7 +136,7 @@ async def root():
         "endpoints": {
             "/analyze": "POST - Analyze network impact for both WE and Others",
             "/analyze/csv": "POST - Download analysis results as CSV",
-            "/analyze/detailed": "POST - Get detailed analysis results",
+            "/analyze/complete": "POST - Get detailed analysis results",
             "/health": "GET - Health check"
         }
     }

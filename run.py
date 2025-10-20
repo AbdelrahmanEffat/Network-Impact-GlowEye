@@ -5,9 +5,6 @@ import time
 
 
 
-
-
-
 def run_command(command, description):
     print(f"Starting {description}...")
     process = subprocess.Popen(command, shell=True)

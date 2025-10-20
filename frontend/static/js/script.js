@@ -20,6 +20,18 @@ document.addEventListener('DOMContentLoaded', function() {
     // Test filtering after a short delay
     setTimeout(testFiltering, 2000);
 
+    const chartsTabButton = document.querySelector('[data-tab="charts-tab"]');
+        if (chartsTabButton) {
+            chartsTabButton.addEventListener('click', function() {
+                setTimeout(colorIsolatedText, 100);
+            });
+        }
+        
+        // Also run if charts tab is already active
+        if (document.getElementById('charts-tab')?.classList.contains('active')) {
+            setTimeout(colorIsolatedText, 100);
+        }
+
     // Tab switching functionality (update existing code)
     const tabButtons = document.querySelectorAll('.tab-button');
     const tabContents = document.querySelectorAll('.tab-content');
@@ -58,6 +70,24 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 });
+
+// Function to color "Isolated" text red in charts tab
+function colorIsolatedText() {
+    const chartsTab = document.getElementById('charts-tab');
+    if (!chartsTab) return;
+    
+    // Find all elements that might contain "Isolated" text
+    const elements = chartsTab.querySelectorAll('.stat-label, .stat-value, .subsection-title, h3, h4, h5');
+    
+    elements.forEach(element => {
+        const html = element.innerHTML;
+        // Replace "Isolated" with red version
+        const newHtml = html.replace(/Isolated/g, '<span style="color: #ff0000; font-weight: bold;">Isolated</span>');
+        if (newHtml !== html) {
+            element.innerHTML = newHtml;
+        }
+    });
+}
 
 function setupTabs() {
     const tabButtons = document.querySelectorAll('.tab-button');
