@@ -519,8 +519,12 @@ def _calculate_we_statistics(we_results):
 
     print("-----  (Merged) Total per BNG -----")
     print(merged)
+    merged_dict = merged.to_dict('records') if not merged.empty else [] # Convert to list of dictionaries for serialization as can't be returned as DataFrame directly
+    print(merged_dict)
+    
 
     return {
+        'merged_bng_data': merged_dict, 
         'isolated_msans': len(isolated_we),
         'partial_msans': len(partial_we),
         'isolated_sub': isolated_we['CUST'].sum() if not isolated_we.empty else 0,
