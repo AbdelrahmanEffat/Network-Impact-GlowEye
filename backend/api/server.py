@@ -459,6 +459,9 @@ async def analyze_network_impact_detailed(request: AnalysisRequest):
         logger.error(f"Detailed analysis failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Detailed analysis failed: {str(e)}")
 
+# --- 3️⃣ Display result ---
+
+
 # Add statistics calculation functions
 def _calculate_we_statistics(we_results):
     """Calculate WE statistics (moved from frontend)"""
@@ -468,7 +471,55 @@ def _calculate_we_statistics(we_results):
     we_unique = we_results.drop_duplicates(subset=['MSANCODE'])
     isolated_we = we_unique[we_unique['Impact'] == 'Isolated']
     partial_we = we_unique[we_unique['Impact'] == 'Path Changed']
+    st_rerouted = we_results[
+    (we_results['STATUS'] == 'ST') & 
+    (we_results['Route_Status'] == 'Traffic Rerouted') &
+    (we_results['Impact'] == 'Path Changed')
+    ]
     
+    st_rerouted_unique = st_rerouted.drop_duplicates(subset=['MSANCODE'])
+    st_rerouted_summary = (
+    st_rerouted_unique.groupby('BNG_HOSTNAME', as_index=False)
+        ['TOTAL_DATA_CUST']
+        .sum()
+        .rename(columns={'TOTAL_DATA_CUST': 'SUM_TOTAL_DATA_CUST_ST_REROUTED'})
+    )
+    env_path = Path(__file__).resolve().parents[1] / 'secrets.env'
+    load_dotenv(dotenv_path=env_path)
+ 
+    data_path = os.getenv('DATA_PATH')
+    value = os.getenv('PRODUCTION')
+    if value=='false':
+        df_report_we = pd.read_csv(f'{data_path}\\we.csv')  # WE data
+    else:
+        # Load CSV files using the path from env
+        df_report_we = pd.read_csv(f'{data_path}/we.csv')  # WE data
+    print("----- ST (Rerouted) Total per BNG -----")
+    print(st_rerouted_summary)
+    df_report_we_up = df_report_we[df_report_we['STATUS'] == 'UP']
+    we_up_sum = (
+    df_report_we_up
+    .groupby('BNG_HOSTNAME', as_index=False)['TOTAL_DATA_CUST']
+    .sum()
+    .rename(columns={'TOTAL_DATA_CUST': 'SUM_TOTAL_DATA_CUST_WE_UP'})
+    )
+
+    # Merge rerouted and WE UP sums by BNG_HOSTNAME
+    merged = pd.merge(st_rerouted_summary, we_up_sum, on='BNG_HOSTNAME', how='left')
+    # --- 7️⃣ Replace NaN with 0 ---
+    merged[['SUM_TOTAL_DATA_CUST_ST_REROUTED', 'SUM_TOTAL_DATA_CUST_WE_UP']] = (
+        merged[['SUM_TOTAL_DATA_CUST_ST_REROUTED', 'SUM_TOTAL_DATA_CUST_WE_UP']].fillna(0)
+    )
+
+    # --- 8️⃣ Add combined total column ---
+    merged['SUM_TOTAL_DATA_CUST_WE_UP_AND_REROUTED'] = (
+        merged['SUM_TOTAL_DATA_CUST_ST_REROUTED'] + merged['SUM_TOTAL_DATA_CUST_WE_UP']
+    )
+
+
+    print("-----  (Merged) Total per BNG -----")
+    print(merged)
+
     return {
         'isolated_msans': len(isolated_we),
         'partial_msans': len(partial_we),
@@ -480,6 +531,7 @@ def _calculate_we_statistics(we_results):
         'partial_sub_data': partial_we['TOTAL_DATA_CUST'].sum() if not partial_we.empty else 0,
         'partial_vic': (partial_we['VIC'] == 'VIC').sum() if not partial_we.empty else 0,
         'iso_vic': (isolated_we['VIC'] == 'VIC').sum() if not isolated_we.empty else 0
+      
     }
 
 
