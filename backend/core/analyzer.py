@@ -307,24 +307,30 @@ class UnifiedNetworkImpactAnalyzer:
 
 
     def analyze_node_impact(self, dwn_node):
-        """Analyze impact when a node fails - with correct logic for Others data"""
+        """Analyze impact when a node fails - FIXED VERSION"""
         if self.final_df is None:
             raise ValueError("Must call generate_base_results() first")
         
+        # STEP 1: Find MSANs where UP records are affected by the node
+        affected_msans = self._find_msans_with_up_records_affected_by_node(dwn_node)
+        
+        if affected_msans.empty:
+            return pd.DataFrame()  # No affected MSANs found
+        
         results = []
         
-        # Case 1: Edge directly impacted
-        edge_impact = self._analyze_direct_impact('EDGE', dwn_node, 'Isolated')
+        # Case 1: Edge directly impacted (ONLY for affected MSANs)
+        edge_impact = self._analyze_direct_impact_modified('EDGE', dwn_node, 'Isolated', affected_msans)
         if not edge_impact.empty:
             results.append(edge_impact)
             
-        # Case 2: Target node directly impacted (AGG/BNG/Bitstream)
-        target_impact = self._analyze_target_node_impact(dwn_node)
+        # Case 2: Target node directly impacted - ONLY for affected MSANs
+        target_impact = self._analyze_target_node_impact_modified(dwn_node, affected_msans)
         if not target_impact.empty:
             results.append(target_impact)
             
-        # Case 3: Physical path impact
-        physical_impact = self._analyze_node_physical_path_impact(dwn_node)
+        # Case 3: Physical path impact - ONLY for affected MSANs  
+        physical_impact = self._analyze_node_physical_path_impact_modified(dwn_node, affected_msans)
         if not physical_impact.empty:
             results.append(physical_impact)
             
@@ -333,14 +339,57 @@ class UnifiedNetworkImpactAnalyzer:
         
         if not combined_results.empty:
             if self.data_type == 'network':
-                # For WE data, use MSAN-level impact
                 combined_results = self._calculate_msan_level_impact(combined_results)
             else:
-                # For Others data, ensure proper impact calculation
                 combined_results = self._calculate_impact_for_others(combined_results)
         
         return combined_results
     
+
+    def _find_msans_with_up_records_affected_by_node(self, dwn_node):
+        """Find MSANs where UP records are affected by the node failure"""
+        
+        # For network data, we only care about UP records as triggers
+        if self.data_type == 'network':
+            base_records = self.final_df[self.final_df['STATUS'] == 'UP']
+        else:
+            # For Others data, all records can trigger
+            base_records = self.final_df
+        
+        if base_records.empty:
+            return pd.DataFrame()
+        
+        target_hostname_col = self.column_map['target_hostname']
+        bng_hostname_col = self.column_map['bng_hostname']
+        
+        # Condition 1: Record's EDGE matches the node
+        edge_affected = base_records[base_records['EDGE'] == dwn_node]
+        
+        # Condition 2: Record's target hostname matches
+        target_affected = base_records[base_records[target_hostname_col] == dwn_node]
+        
+        # Condition 3: For network data, check BNG hostname
+        bng_affected = pd.DataFrame()
+        if self.data_type == 'network' and bng_hostname_col:
+            bng_affected = base_records[base_records[bng_hostname_col] == dwn_node]
+        
+        # Condition 4: Record's path contains the node
+        path_affected_mask = base_records['Path'].apply(
+            lambda path: (isinstance(path, list) and len(path) >= 3 and 
+                        dwn_node in path[1:-1])
+        )
+        path_affected = base_records[path_affected_mask]
+        
+        # Combine all affected MSANs
+        all_affected_msans = set()
+        for df in [edge_affected, target_affected, bng_affected, path_affected]:
+            if not df.empty:
+                all_affected_msans.update(df['MSANCODE'].unique())
+        
+        # Return DataFrame with affected MSANs
+        return pd.DataFrame({'MSANCODE': list(all_affected_msans)})
+
+
     def _analyze_direct_impact(self, column, value, impact_type):
         """Generic method for analyzing direct impact on a column - with Impact column guarantee"""
         impact_df = self.final_df[self.final_df[column] == value].copy()
@@ -403,28 +452,37 @@ class UnifiedNetworkImpactAnalyzer:
         
         return all_affected
 
-    def _analyze_target_node_impact(self, dwn_node):
-        """Analyze direct impact on target nodes (AGG/BNG/Bitstream) - fixed to keep all MSAN records"""
+    def _analyze_target_node_impact_modified(self, dwn_node, affected_msans):
+        """Analyze direct impact on target nodes - ONLY for affected MSANs"""
         target_hostname_col = self.column_map['target_hostname']
         bng_hostname_col = self.column_map['bng_hostname']
         
+        # Only consider records from affected MSANs
         if self.data_type == 'network' and bng_hostname_col:
             # Network data: BNG or distribution hostname affected
             direct_impact = self.final_df[
-                (self.final_df[bng_hostname_col] == dwn_node) | 
-                (self.final_df[target_hostname_col] == dwn_node)
+                ((self.final_df[bng_hostname_col] == dwn_node) | 
+                (self.final_df[target_hostname_col] == dwn_node)) &
+                (self.final_df.MSANCODE.isin(affected_msans['MSANCODE']))
             ]
         else:
             # Others data: Only bitstream hostname affected
-            direct_impact = self.final_df[self.final_df[target_hostname_col] == dwn_node]
+            direct_impact = self.final_df[
+                (self.final_df[target_hostname_col] == dwn_node) &
+                (self.final_df.MSANCODE.isin(affected_msans['MSANCODE']))
+            ]
         
         if direct_impact.empty:
             return pd.DataFrame()
         
+        # Calculate alternative paths excluding the specific node
+        graph = self.model.draw_graph(excluded_nodes=[dwn_node])
+        
         if self.data_type == 'network':
             # For network type, get all records for affected MSANs
+            affected_msans_list = direct_impact.MSANCODE.unique()
             all_affected = self.final_df[
-                self.final_df.MSANCODE.isin(direct_impact.MSANCODE.unique())
+                self.final_df.MSANCODE.isin(affected_msans_list)
             ].copy()
             
             # Determine impact based on circuit type
@@ -438,15 +496,18 @@ class UnifiedNetworkImpactAnalyzer:
                     msan_impacts[msan] = 'Path Changed'
             
             all_affected['Impact'] = all_affected['MSANCODE'].map(msan_impacts)
+            
+            # Calculate Path2 for all records
+            all_affected['Path2'] = all_affected.apply(
+                lambda row: self.model.calculate_path(graph, row['EDGE'], row[target_hostname_col]),
+                axis=1
+            )
         else:
             # For Others data, get ALL records for the affected MSANs but only mark specific ones
-            affected_msans = direct_impact.MSANCODE.unique()
+            affected_msans_list = direct_impact.MSANCODE.unique()
             all_affected = self.final_df[
-                self.final_df.MSANCODE.isin(affected_msans)
+                self.final_df.MSANCODE.isin(affected_msans_list)
             ].copy()
-            
-            # Calculate alternative paths ONLY for the directly affected records
-            graph = self.model.draw_graph(excluded_nodes=[dwn_node])
             
             # Create a mask for directly affected records
             if self.data_type == 'network' and bng_hostname_col:
@@ -544,12 +605,35 @@ class UnifiedNetworkImpactAnalyzer:
         
         return all_affected
 
-    def _analyze_node_physical_path_impact(self, dwn_node):
-        """Analyze physical path impact for node failure - fixed to keep all MSAN records"""
-        # Find records with the node in their paths
-        affected_records = self._find_records_with_nodes_in_path([dwn_node])
+    def _analyze_node_physical_path_impact_modified(self, dwn_node, affected_msans):
+        """Analyze physical path impact for node failure - ONLY for affected MSANs"""
         
-        if affected_records.empty:
+        # Get all records from affected MSANs
+        affected_msan_records = self.final_df[
+            self.final_df.MSANCODE.isin(affected_msans['MSANCODE'])
+        ].copy()
+        
+        if affected_msan_records.empty:
+            return pd.DataFrame()
+        
+        # Find records with the node in their paths (within the affected MSANs)
+        path_affected_mask = affected_msan_records['Path'].apply(
+            lambda path: (isinstance(path, list) and len(path) >= 3 and 
+                        dwn_node in path[1:-1])
+        )
+        
+        # Check Path2 column if it exists
+        path2_affected_mask = pd.Series([False] * len(affected_msan_records))
+        if 'Path2' in affected_msan_records.columns:
+            path2_affected_mask = affected_msan_records['Path2'].apply(
+                lambda path: (isinstance(path, list) and len(path) >= 3 and 
+                            dwn_node in path[1:-1])
+            )
+        
+        # Find records that have the node in their paths
+        path_affected_records = affected_msan_records[path_affected_mask | path2_affected_mask]
+        
+        if path_affected_records.empty:
             return pd.DataFrame()
         
         # Calculate alternative paths excluding the specific node
@@ -558,9 +642,9 @@ class UnifiedNetworkImpactAnalyzer:
         
         if self.data_type == 'network':
             # For network data, get all records for affected MSANs
-            affected_msans = affected_records.MSANCODE.unique()
+            affected_msans_from_path = path_affected_records.MSANCODE.unique()
             all_affected = self.final_df[
-                self.final_df.MSANCODE.isin(affected_msans)
+                self.final_df.MSANCODE.isin(affected_msans_from_path)
             ].copy()
             
             all_affected['Path2'] = all_affected.apply(
@@ -577,9 +661,9 @@ class UnifiedNetworkImpactAnalyzer:
             all_affected = self._calculate_msan_level_impact(all_affected)
         else:
             # For Others data, get ALL records for affected MSANs but only mark specific ones
-            affected_msans = affected_records.MSANCODE.unique()
+            affected_msans_from_path = path_affected_records.MSANCODE.unique()
             all_affected = self.final_df[
-                self.final_df.MSANCODE.isin(affected_msans)
+                self.final_df.MSANCODE.isin(affected_msans_from_path)
             ].copy()
             
             # Initialize Path2 and Impact columns

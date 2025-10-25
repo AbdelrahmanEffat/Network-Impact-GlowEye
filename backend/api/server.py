@@ -62,7 +62,11 @@ we_base_results = None
 others_base_results = None
 # Global lock for thread-safe operations
 analyzer_lock = threading.Lock()
-
+# download update
+latest_we_results = None
+latest_others_results = None
+latest_identifier = None
+latest_identifier_type = None
 
 @app.on_event("startup")
 async def startup_event():
@@ -157,7 +161,9 @@ async def health_check():
 
 @app.post("/analyze/complete")
 async def analyze_network_impact_complete(request: AnalysisRequest):
-    """Single endpoint that returns both summary and detailed results"""
+    """Single endpoint that returns both summary and detailed results - UPDATED TO STORE RESULTS"""
+    global latest_we_results, latest_others_results, latest_identifier, latest_identifier_type
+    
     if we_analyzer is None or others_analyzer is None:
         raise HTTPException(status_code=503, detail="Service not ready")
     
@@ -187,13 +193,6 @@ async def analyze_network_impact_complete(request: AnalysisRequest):
         
         execution_time = time.time() - start_time
         
-        # Print performance statistics
-        print(f"Analysis completed in {execution_time:.2f} seconds")
-        if hasattr(we_analyzer, 'print_method_stats'):
-            we_analyzer.print_method_stats()
-        if hasattr(others_analyzer, 'print_method_stats'):
-            others_analyzer.print_method_stats()
-        
         # FIX: Ensure Path2 column exists for both datasets
         if not we_results.empty and 'Path2' not in we_results.columns:
             we_results['Path2'] = None
@@ -209,13 +208,18 @@ async def analyze_network_impact_complete(request: AnalysisRequest):
             others_results['Route_Status'] = others_results.apply(
                 lambda row: others_analyzer._calculate_route_status_individual(
                     row['Path'], 
-                    row['Path2'] if 'Path2' in row else None,  # Safe access to Path2
+                    row['Path2'] if 'Path2' in row else None,
                     row.get('STATUS', 'UP'), 
                     row['Impact']
                 ),
                 axis=1
             )
         
+        # STORE THE COMPUTED RESULTS FOR DOWNLOAD
+        latest_we_results = we_results.copy()
+        latest_others_results = others_results.copy()
+        latest_identifier = request.identifier
+        latest_identifier_type = request.identifier_type
         
         # Create summaries
         we_impact_summary = _create_impact_summary(we_results)
@@ -343,39 +347,81 @@ async def analyze_network_impact(request: AnalysisRequest):
 async def analyze_and_return_csv(request: AnalysisRequest):
     """
     Analyze network impact and return results as a zip file containing both WE and Others CSVs
+    NOW USES PRE-COMPUTED RESULTS
     """
+    global latest_we_results, latest_others_results, latest_identifier, latest_identifier_type
+    
     if we_analyzer is None or others_analyzer is None:
-        raise HTTPException(
-            status_code=503, 
-            detail="Service not ready - analyzers not initialized"
-        )
+        raise HTTPException(status_code=503, detail="Service not ready")
     
     try:
         logger.info(f"Starting CSV export for {request.identifier}")
         
-        # Use precomputed base results and only run impact analysis
-        we_analyzer.final_df = we_base_results
-        others_analyzer.final_df = others_base_results
+        # Check if we have pre-computed results for this identifier
+        use_precomputed = (
+            latest_we_results is not None and 
+            latest_others_results is not None and
+            latest_identifier == request.identifier and
+            latest_identifier_type == request.identifier_type
+        )
         
-        # Run the impact analysis on both data types
-        if request.identifier_type == 'exchange' or (request.identifier_type == 'auto' and _is_exchange_identifier(request.identifier)):
-            we_results = we_analyzer.analyze_exchange_impact(request.identifier)
-            others_results = others_analyzer.analyze_exchange_impact(request.identifier)
+        if use_precomputed:
+            logger.info("Using pre-computed results for CSV export")
+            we_results = latest_we_results
+            others_results = latest_others_results
         else:
-            we_results = we_analyzer.analyze_node_impact(request.identifier)
-            others_results = others_analyzer.analyze_node_impact(request.identifier)
+            logger.info("No pre-computed results found, running analysis...")
+            # Use precomputed base results and only run impact analysis
+            we_analyzer.final_df = we_base_results
+            others_analyzer.final_df = others_base_results
+            
+            # Run the impact analysis on both data types
+            if request.identifier_type == 'exchange' or (request.identifier_type == 'auto' and _is_exchange_identifier(request.identifier)):
+                we_results = we_analyzer.analyze_exchange_impact(request.identifier)
+                others_results = others_analyzer.analyze_exchange_impact(request.identifier)
+            else:
+                we_results = we_analyzer.analyze_node_impact(request.identifier)
+                others_results = others_analyzer.analyze_node_impact(request.identifier)
+            
+            # Apply the same transformations as in complete analysis
+            if not we_results.empty:
+                we_results = we_analyzer._calculate_msan_level_route_status(we_results)
+            
+            if not others_results.empty:
+                others_results['Route_Status'] = others_results.apply(
+                    lambda row: others_analyzer._calculate_route_status_individual(
+                        row['Path'], 
+                        row['Path2'] if 'Path2' in row else None,
+                        row.get('STATUS', 'UP'), 
+                        row['Impact']
+                    ),
+                    axis=1
+                )
         
         # Create zip file in memory
         zip_buffer = io.BytesIO()
         
         with zipfile.ZipFile(zip_buffer, 'a', zipfile.ZIP_DEFLATED, False) as zip_file:
-            # Add WE results
+            # Add WE results - include ALL columns
             we_csv = we_results.to_csv(index=False)
             zip_file.writestr(f"we_impact_{request.identifier}.csv", we_csv)
             
-            # Add Others results
+            # Add Others results - include ALL columns
             others_csv = others_results.to_csv(index=False)
             zip_file.writestr(f"others_impact_{request.identifier}.csv", others_csv)
+            
+            # Add a metadata file with info about the export
+            metadata = {
+                "identifier": request.identifier,
+                "identifier_type": request.identifier_type,
+                "export_timestamp": pd.Timestamp.now().isoformat(),
+                "we_records_count": len(we_results),
+                "others_records_count": len(others_results),
+                "used_precomputed_results": use_precomputed,
+                "columns_in_we": list(we_results.columns) if not we_results.empty else [],
+                "columns_in_others": list(others_results.columns) if not others_results.empty else []
+            }
+            zip_file.writestr("export_metadata.json", json.dumps(metadata, indent=2))
         
         zip_buffer.seek(0)
         
@@ -395,11 +441,28 @@ async def analyze_and_return_csv(request: AnalysisRequest):
         
     except Exception as e:
         logger.error(f"CSV export failed: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"CSV export failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"CSV export failed: {str(e)}")
+
+
+@app.get("/debug/columns")
+async def debug_columns():
+    """Debug endpoint to check column consistency between computed results"""
+    global latest_we_results, latest_others_results
     
+    if latest_we_results is None or latest_others_results is None:
+        return {"message": "No computed results available"}
+    
+    we_columns = list(latest_we_results.columns) if not latest_we_results.empty else []
+    others_columns = list(latest_others_results.columns) if not latest_others_results.empty else []
+    
+    return {
+        "we_columns": we_columns,
+        "others_columns": others_columns,
+        "we_shape": latest_we_results.shape,
+        "others_shape": latest_others_results.shape,
+        "we_memory_usage": latest_we_results.memory_usage(deep=True).sum() if not latest_we_results.empty else 0,
+        "others_memory_usage": latest_others_results.memory_usage(deep=True).sum() if not latest_others_results.empty else 0
+    }
 
 @app.post("/analyze/detailed")
 async def analyze_network_impact_detailed(request: AnalysisRequest):

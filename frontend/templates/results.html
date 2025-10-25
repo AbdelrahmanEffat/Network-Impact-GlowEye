@@ -197,6 +197,63 @@
                 grid-template-columns: 1fr;
             }
         }
+
+
+        /* Download */
+        .spinner-border-sm {
+            width: 1rem;
+            height: 1rem;
+            margin-left: 8px;
+        }
+
+        .visually-hidden {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        .d-none {
+            display: none !important;
+        }
+
+        /* Ensure button stays inline with spinner */
+        #downloadBtn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .alert {
+            padding: 8px 12px;
+            margin: 5px 0;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .alert-info {
+            background-color: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+
+        .alert-success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+
+        .alert-danger {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
     </style>
 </head>
 <body>
@@ -208,8 +265,13 @@
             
             <div class="action-buttons">
                 <a href="/" class="btn-secondary">New Analysis</a>
-                <a href="/download?identifier={{ identifier }}&identifier_type={{ identifier_type }}" 
-                   class="btn-primary">Download Results</a>
+                <button id="downloadBtn" onclick="downloadResults()" class="btn-primary">
+                    <span id="downloadText">Download Results</span>
+                    <div id="downloadSpinner" class="spinner-border spinner-border-sm d-none" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </button>
+                <div id="downloadStatus" class="mt-2"></div>
             </div>
         </div>
         
@@ -1532,6 +1594,57 @@
                 });
             }
         });
+
+
+        // Download results function
+        async function downloadResults() {
+        const identifier = "{{ identifier }}";
+        const identifierType = "{{ identifier_type }}";
+        
+        try {
+            // Use your existing frontend download endpoint
+            const response = await fetch('/download', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    identifier: identifier,
+                    identifier_type: identifierType
+                })
+            });
+            
+            if (response.ok) {
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                
+                // Get filename from response headers or generate it
+                const contentDisposition = response.headers.get('content-disposition');
+                let filename = `network_impact_${identifier}.zip`;
+                
+                if (contentDisposition) {
+                    const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+                    if (filenameMatch) {
+                        filename = filenameMatch[1];
+                    }
+                }
+                
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            } else {
+                const errorText = await response.text();
+                alert('Download failed: ' + errorText);
+            }
+        } catch (error) {
+            console.error('Download error:', error);
+            alert('Download failed: ' + error.message);
+        }
+    }
     </script>
 </body>
 </html>

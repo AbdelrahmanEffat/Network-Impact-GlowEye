@@ -11,12 +11,15 @@ import zipfile
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+from fastapi.middleware.cors import CORSMiddleware
+
 
 app = FastAPI(
     title="Network Impact Analysis Web Interface",
     description="Web interface for visualizing network impact analysis results",
     version="2.0.0"
 )
+
 
 env_path = Path(__file__).resolve().parents[0] / 'secrets.env'
 load_dotenv(dotenv_path=env_path)
@@ -100,11 +103,19 @@ async def analyze_network_impact(
         )
 
 
-@app.get("/download")
-async def download_results(identifier: str, identifier_type: str = "auto"):
-    """Download analysis results as CSV"""
+@app.post("/download")
+async def download_results(request: Request):
+    """Download analysis results as CSV - UPDATED FOR POST"""
     try:
-        # Call the CSV API
+        # Get data from request body instead of query parameters
+        data = await request.json()
+        identifier = data.get('identifier')
+        identifier_type = data.get('identifier_type', 'auto')
+        
+        if not identifier:
+            raise HTTPException(status_code=400, detail="Identifier is required")
+        
+        # Call the backend CSV API
         api_url = f"{API_BASE_URL}/analyze/csv"
         response = requests.post(
             api_url,
@@ -127,6 +138,13 @@ async def download_results(identifier: str, identifier_type: str = "auto"):
             
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Download failed: {str(e)}")
+
+@app.get("/download")
+async def download_results_get(identifier: str, identifier_type: str = "auto"):
+    """GET version for backward compatibility"""
+    # Redirect to POST or handle similarly
+    return await download_results(Request(scope={"type": "http"}, receive=None))
+
 
 async def get_detailed_data(identifier, identifier_type, data_type):
     """Get detailed data from the API"""
