@@ -86,18 +86,20 @@ async def startup_event():
             logger.info(f"Loading CSV files from: {data_path}")
 
             if value=='false':
-                df_report_we = pd.read_csv(f'{data_path}\\we.csv')  # WE data
-                df_report_others = pd.read_csv(f'{data_path}\\others.csv')  # Others data
-                df_res_ospf = pd.read_csv(f'{data_path}\\res_ospf.csv')
-                df_wan = pd.read_csv(f'{data_path}\\wan.csv')
-                df_agg = pd.read_csv(f'{data_path}\\agg.csv')
+                df_report_we = pd.read_csv(f'{data_path}\\we_igw.csv', low_memory=False)  # WE data
+                df_report_others = pd.read_csv(f'{data_path}\\others.csv', low_memory=False)  # Others data
+                df_res_ospf = pd.read_csv(f'{data_path}\\res_ospf.csv', low_memory=False)
+                df_wan = pd.read_csv(f'{data_path}\\wan.csv', low_memory=False)
+                df_agg = pd.read_csv(f'{data_path}\\agg.csv', low_memory=False)
+                df_noms = pd.read_csv(f'{data_path}\\NOMS.csv', low_memory=False)
             else:
                 # Load CSV files using the path from env
-                df_report_we = pd.read_csv(f'{data_path}/we.csv')  # WE data
-                df_report_others = pd.read_csv(f'{data_path}/others.csv')  # Others data
-                df_res_ospf = pd.read_csv(f'{data_path}/res_ospf.csv')
-                df_wan = pd.read_csv(f'{data_path}/wan.csv')
-                df_agg = pd.read_csv(f'{data_path}/agg.csv')
+                df_report_we = pd.read_csv(f'{data_path}/we_igw.csv', low_memory=False)  # WE data
+                df_report_others = pd.read_csv(f'{data_path}/others.csv', low_memory=False)  # Others data
+                df_res_ospf = pd.read_csv(f'{data_path}/res_ospf.csv', low_memory=False)
+                df_wan = pd.read_csv(f'{data_path}/wan.csv', low_memory=False)
+                df_agg = pd.read_csv(f'{data_path}/agg.csv', low_memory=False)
+                df_noms = pd.read_csv(f'{data_path}/NOMS.csv', low_memory=False)
                 
             ## maping columns names
             df_report_others.columns = df_report_others.columns.str.upper()
@@ -111,8 +113,8 @@ async def startup_event():
                                         'EDGE_PORT':'edge_port'}, inplace=True)
             
             # Initialize analyzers for both data types
-            we_analyzer = UnifiedNetworkImpactAnalyzer(df_report_we, df_res_ospf, df_wan, df_agg)
-            others_analyzer = UnifiedNetworkImpactAnalyzer(df_report_others, df_res_ospf, df_wan, df_agg)
+            we_analyzer = UnifiedNetworkImpactAnalyzer(df_report_we, df_res_ospf, df_wan, df_agg, df_noms)
+            others_analyzer = UnifiedNetworkImpactAnalyzer(df_report_others, df_res_ospf, df_wan, df_agg, df_noms)
             
             # Preprocess data and generate base results
             logger.info("Preprocessing data and generating base results...")
@@ -557,8 +559,8 @@ def _calculate_we_statistics(we_results):
     else:
         # Load CSV files using the path from env
         df_report_we = pd.read_csv(f'{data_path}/we.csv')  # WE data
-    print("----- ST (Rerouted) Total per BNG -----")
-    print(st_rerouted_summary)
+    #print("----- ST (Rerouted) Total per BNG -----")
+    #print(st_rerouted_summary)
     df_report_we_up = df_report_we[df_report_we['STATUS'] == 'UP']
     we_up_sum = (
     df_report_we_up
@@ -580,10 +582,10 @@ def _calculate_we_statistics(we_results):
     )
 
 
-    print("-----  (Merged) Total per BNG -----")
-    print(merged)
+    #print("-----  (Merged) Total per BNG -----")
+    #print(merged)
     merged_dict = merged.to_dict('records') if not merged.empty else [] # Convert to list of dictionaries for serialization as can't be returned as DataFrame directly
-    print(merged_dict)
+    #print(merged_dict)
     
 
     return {

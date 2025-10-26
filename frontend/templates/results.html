@@ -305,7 +305,7 @@
                 <button class="tab-button active" data-tab="we-tab">WE Data</button>
                 <button class="tab-button" data-tab="others-tab">Others Data</button>
                 <button class="tab-button" data-tab="charts-tab">Charts</button>
-                <button class="tab-button" data-tab="topology-tab">Network Topology</button>
+                <!-- <button class="tab-button" data-tab="topology-tab">Network Topology</button> -->
                 <button class="tab-button" data-tab="dashboard-tab">Dashboard-WE</button>
                 <button class="tab-button" data-tab="dashboard-tab-other">Dashboard-Others</button>
             </div>
@@ -382,6 +382,8 @@
                                     <th>EDGE</th>
                                     <th>Distribution Hostname</th>
                                     <th>BNG Hostname</th>
+                                    <th>IGW Hostname</th>
+                                    <th>IGW Interface</th>
                                     <th>Status</th>
                                     <th>Customer Count</th>
                                     <th>Voice-Customer Count</th>
@@ -391,6 +393,7 @@
                                     <th>Route_Status</th>
                                     <th>Physical Path</th>
                                     <th>Backup Physical Path</th>
+                                    <th>BNG2IGW</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -400,6 +403,8 @@
                                     <td>{{ record.EDGE }}</td>
                                     <td>{{ record.distribution_hostname }}</td>
                                     <td>{{ record.BNG_HOSTNAME }}</td>
+                                    <td>{{ record.igw_hostname }}</td>
+                                    <td>{{ record.igw_interfaces }}</td>
                                     <td>{{ record.STATUS }}</td>
                                     <td>{{ record.CUST }}</td>
                                     <td>{{ record.TOTAL_VOICE_CUST }}</td>
@@ -411,6 +416,7 @@
                                     </td>
                                     <td>{{ record.Path }}</td>
                                     <td>{{ record.Path2 }}</td>
+                                    <td>{{ record.bngToIgw }}</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -982,7 +988,7 @@
                 </div>
             </div>
 
-            <div id="topology-tab" class="tab-content">
+            <!-- <div id="topology-tab" class="tab-content">
                 <div class="section">
                     <h2 class="section-title">Network Topology Visualization</h2>
                     <div class="visualization-controls">
@@ -1022,7 +1028,7 @@
                         </div>
                     </div>
                 </div>
-            </div>
+            </div> -->
 
             <div id="dashboard-tab" class="tab-content">
                 <div class="section">
@@ -1073,36 +1079,50 @@
     });
 
     // Single DOMContentLoaded event listener
+    // Replace the existing DOMContentLoaded section with this:
     document.addEventListener('DOMContentLoaded', function() {
-        console.log('=== PAGE LOADED ===');
+        console.log('=== PAGE LOADED - LAZY INIT ===');
         
-        // Initialize charts
+        // Initialize only essential components immediately
         initializeCharts();
-
-        // Initialize searchable dropdowns enhanced version for better performance:
         initializeEnhancedFiltering();
+        initializeIspTabs();
         
-        // Initialize dashboard if data is available
-        if (typeof NetworkDashboard !== 'undefined' && weData && weData.length > 0) {
-            initializeDashboard();
-        } else {
-            console.warn('Dashboard not initialized - missing requirements:', {
-                NetworkDashboard: typeof NetworkDashboard,
-                weDataExists: !!weData,
-                weDataLength: weData ? weData.length : 0
+        // LAZY LOAD heavy components only when tabs are clicked
+        let weDashboardInitialized = false;
+        let othersDashboardInitialized = false;
+        
+        document.querySelectorAll('.tab-button').forEach(button => {
+            button.addEventListener('click', function() {
+                const tabId = this.getAttribute('data-tab');
+                
+                if (tabId === 'dashboard-tab' && !weDashboardInitialized) {
+                    setTimeout(() => {
+                        if (typeof NetworkDashboard !== 'undefined' && weData && weData.length > 0) {
+                            initializeDashboard();
+                            weDashboardInitialized = true;
+                        }
+                    }, 100);
+                }
+                
+                if (tabId === 'dashboard-tab-other' && !othersDashboardInitialized) {
+                    setTimeout(() => {
+                        if (typeof NetworkDashboardOthers !== 'undefined' && othersDataDash && othersDataDash.length > 0) {
+                            window.othersDashboard = new NetworkDashboardOthers();
+                            window.othersDashboard.initialize(othersDataDash, identifier);
+                            window.othersDashboard.renderDashboard();
+                            othersDashboardInitialized = true;
+                        }
+                    }, 100);
+                }
             });
-        }
+        });
         
         // Initialize pagination if function exists
         if (typeof setupPagination === 'function') {
-            setupPagination('we-table', 50);
-            setupPagination('others-table', 50);
-        } else {
-            console.log('setupPagination function not available - pagination disabled');
+            setupPagination('we-table', 25); // Reduced from 50
+            setupPagination('others-table', 25);
         }
-        
-        // Initialize ISP tabs functionality
-        initializeIspTabs();
     });
 
 
@@ -1555,6 +1575,23 @@
             console.error('Failed to initialize dashboard');
         }
     }
+
+    // In your JavaScript, modify tab switching to lazy load
+    document.querySelectorAll('.tab-button').forEach(button => {
+        button.addEventListener('click', function() {
+            const tabId = this.getAttribute('data-tab');
+            
+            if (tabId === 'dashboard-tab' && !window.dashboardInitialized) {
+                initializeDashboard();
+                window.dashboardInitialized = true;
+            }
+            
+            if (tabId === 'dashboard-tab-other' && !window.othersDashboardInitialized) {
+                initializeOthersDashboard();
+                window.othersDashboardInitialized = true;
+            }
+        });
+    });
 
     function initializeIspTabs() {
         const ispTabButtons = document.querySelectorAll('.isp-tab-button');
