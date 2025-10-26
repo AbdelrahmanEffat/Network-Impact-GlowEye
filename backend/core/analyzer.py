@@ -707,16 +707,16 @@ class UnifiedNetworkImpactAnalyzer:
         
         # Also check WAN data for nodes in this exchange - WITH BETTER FILTERING
         wan_nodes_in_exchange = []
-        if hasattr(self, 'df_wan') and self.df_wan is not None:
-            # Look for nodes that have the exact exchange code in their name
-            # Using more precise pattern matching
-            for node in self.df_wan['NODENAME'].dropna().unique():
-                if self._is_node_in_exchange(node, exchange_code, dwn_exchange):
-                    wan_nodes_in_exchange.append(node)
+        # if hasattr(self, 'df_wan') and self.df_wan is not None:
+        #     # Look for nodes that have the exact exchange code in their name
+        #     # Using more precise pattern matching
+        #     for node in self.df_wan['NODENAME'].dropna().unique():
+        #         if self._is_node_in_exchange(node, exchange_code, dwn_exchange):
+        #             wan_nodes_in_exchange.append(node)
             
-            for node in self.df_wan['NEIGHBOR_HOSTNAME'].dropna().unique():
-                if self._is_node_in_exchange(node, exchange_code, dwn_exchange):
-                    wan_nodes_in_exchange.append(node)
+        #     for node in self.df_wan['NEIGHBOR_HOSTNAME'].dropna().unique():
+        #         if self._is_node_in_exchange(node, exchange_code, dwn_exchange):
+        #             wan_nodes_in_exchange.append(node)
         
         # Combine and deduplicate all nodes
         all_nodes = list(set(edge_nodes + target_nodes + wan_nodes_in_exchange))
