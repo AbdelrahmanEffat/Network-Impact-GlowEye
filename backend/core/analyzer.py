@@ -46,7 +46,18 @@ class UnifiedNetworkImpactAnalyzer:
         self._exchange_nodes_cache = {}
         
         print(f"Detected data type: {self.data_type}")
+    
+
+    def clear_memory(self):
+        """Clear memory-intensive caches"""
+        if hasattr(self, '_exchange_nodes_cache'):
+            self._exchange_nodes_cache.clear()
         
+        # Force garbage collection
+        import gc
+        gc.collect()
+        print("Memory caches cleared")
+
     def _detect_data_type(self):
         """Auto-detect data type based on available columns"""
         if 'distribution_hostname' in self.df_report.columns and 'BNG_HOSTNAME' in self.df_report.columns:
@@ -208,6 +219,8 @@ class UnifiedNetworkImpactAnalyzer:
         if self.final_df is None:
             raise ValueError("Must call generate_base_results() first")
         
+        self.clear_memory()  # Clear caches before analysis
+        
         # Get exchange nodes ONCE and cache them
         affected_nodes = self._get_exchange_nodes(dwn_exchange)
         
@@ -266,40 +279,58 @@ class UnifiedNetworkImpactAnalyzer:
 
 
     def _find_msans_with_up_records_affected(self, dwn_exchange, affected_nodes):
-        """Find MSANs where UP records contain the affected exchange nodes"""
+        """Find MSANs where UP records contain the affected exchange nodes - OPTIMIZED"""
         
         # For network data, we only care about UP records as triggers
         if self.data_type == 'network':
-            base_records = self.final_df[self.final_df['STATUS'] == 'UP']
+            base_records = self.final_df[self.final_df['STATUS'] == 'UP'].copy()
         else:
             # For Others data, all records can trigger
-            base_records = self.final_df
+            base_records = self.final_df.copy()
         
         if base_records.empty:
-            return pd.DataFrame()
+            return pd.DataFrame({'MSANCODE': []})
         
-        # Check multiple conditions for records being affected
         edge_exchange_col = self.column_map['edge_exchange']
         target_exchange_col = self.column_map['target_exchange']
         
-        # Condition 1: Record's edge exchange matches
-        edge_affected = base_records[base_records[edge_exchange_col] == dwn_exchange]
+        # ========== OPTIMIZATION 1: Use vectorized operations for simple checks ==========
+        # These are much faster than filtering DataFrames multiple times
+        edge_mask = base_records[edge_exchange_col] == dwn_exchange
+        target_mask = base_records[target_exchange_col] == dwn_exchange
         
-        # Condition 2: Record's target exchange matches  
-        target_affected = base_records[base_records[target_exchange_col] == dwn_exchange]
+        # ========== OPTIMIZATION 2: Convert affected_nodes to set for faster lookup ==========
+        affected_nodes_set = set(affected_nodes)
         
-        # Condition 3: Record's path contains affected nodes
-        path_affected_mask = base_records['Path'].apply(
-            lambda path: (isinstance(path, list) and len(path) >= 3 and 
-                        any(node in path[1:-1] for node in affected_nodes))
-        )
-        path_affected = base_records[path_affected_mask]
+        # ========== OPTIMIZATION 3: Only check paths for records that don't match edge/target ==========
+        # This reduces the number of expensive path checks
+        needs_path_check = ~(edge_mask | target_mask)
         
-        # Combine all affected MSANs
+        if needs_path_check.any():
+            # Use set intersection instead of 'any(node in path)' - it's faster
+            path_mask = base_records.loc[needs_path_check, 'Path'].apply(
+                lambda path: (isinstance(path, list) and len(path) >= 3 and 
+                            bool(affected_nodes_set.intersection(path[1:-1])))
+            )
+            
+            # Get MSANs from path-affected records
+            path_affected_msans = set(base_records[needs_path_check][path_mask]['MSANCODE'])
+        else:
+            path_affected_msans = set()
+        
+        # ========== OPTIMIZATION 4: Use sets for combining (faster than DataFrame operations) ==========
         all_affected_msans = set()
-        for df in [edge_affected, target_affected, path_affected]:
-            if not df.empty:
-                all_affected_msans.update(df['MSANCODE'].unique())
+        
+        # Add MSANs from edge matches
+        if edge_mask.any():
+            all_affected_msans.update(base_records[edge_mask]['MSANCODE'])
+        
+        # Add MSANs from target matches
+        if target_mask.any():
+            all_affected_msans.update(base_records[target_mask]['MSANCODE'])
+        
+        # Add MSANs from path matches
+        all_affected_msans.update(path_affected_msans)
         
         # Return DataFrame with affected MSANs
         return pd.DataFrame({'MSANCODE': list(all_affected_msans)})
@@ -310,6 +341,8 @@ class UnifiedNetworkImpactAnalyzer:
         if self.final_df is None:
             raise ValueError("Must call generate_base_results() first")
         
+        self.clear_memory()  # Clear caches before analysis
+
         # STEP 1: Find MSANs where UP records are affected by the node
         affected_msans = self._find_msans_with_up_records_affected_by_node(dwn_node)
         
@@ -346,44 +379,54 @@ class UnifiedNetworkImpactAnalyzer:
     
 
     def _find_msans_with_up_records_affected_by_node(self, dwn_node):
-        """Find MSANs where UP records are affected by the node failure"""
+        """Find MSANs where UP records are affected by the node failure - OPTIMIZED"""
         
         # For network data, we only care about UP records as triggers
         if self.data_type == 'network':
-            base_records = self.final_df[self.final_df['STATUS'] == 'UP']
+            base_records = self.final_df[self.final_df['STATUS'] == 'UP'].copy()
         else:
             # For Others data, all records can trigger
-            base_records = self.final_df
+            base_records = self.final_df.copy()
         
         if base_records.empty:
-            return pd.DataFrame()
+            return pd.DataFrame({'MSANCODE': []})
         
         target_hostname_col = self.column_map['target_hostname']
         bng_hostname_col = self.column_map['bng_hostname']
         
-        # Condition 1: Record's EDGE matches the node
-        edge_affected = base_records[base_records['EDGE'] == dwn_node]
+        # ========== OPTIMIZATION: Use vectorized boolean masks ==========
+        edge_mask = base_records['EDGE'] == dwn_node
+        target_mask = base_records[target_hostname_col] == dwn_node
         
-        # Condition 2: Record's target hostname matches
-        target_affected = base_records[base_records[target_hostname_col] == dwn_node]
-        
-        # Condition 3: For network data, check BNG hostname
-        bng_affected = pd.DataFrame()
+        # Check BNG hostname for network data
         if self.data_type == 'network' and bng_hostname_col:
-            bng_affected = base_records[base_records[bng_hostname_col] == dwn_node]
+            bng_mask = base_records[bng_hostname_col] == dwn_node
+        else:
+            bng_mask = pd.Series([False] * len(base_records), index=base_records.index)
         
-        # Condition 4: Record's path contains the node
-        path_affected_mask = base_records['Path'].apply(
-            lambda path: (isinstance(path, list) and len(path) >= 3 and 
-                        dwn_node in path[1:-1])
-        )
-        path_affected = base_records[path_affected_mask]
+        # Only check paths for records that don't match edge/target/bng
+        needs_path_check = ~(edge_mask | target_mask | bng_mask)
         
-        # Combine all affected MSANs
+        if needs_path_check.any():
+            path_mask = base_records.loc[needs_path_check, 'Path'].apply(
+                lambda path: (isinstance(path, list) and len(path) >= 3 and 
+                            dwn_node in path[1:-1])
+            )
+            path_affected_msans = set(base_records[needs_path_check][path_mask]['MSANCODE'])
+        else:
+            path_affected_msans = set()
+        
+        # Combine using sets (faster)
         all_affected_msans = set()
-        for df in [edge_affected, target_affected, bng_affected, path_affected]:
-            if not df.empty:
-                all_affected_msans.update(df['MSANCODE'].unique())
+        
+        if edge_mask.any():
+            all_affected_msans.update(base_records[edge_mask]['MSANCODE'])
+        if target_mask.any():
+            all_affected_msans.update(base_records[target_mask]['MSANCODE'])
+        if bng_mask.any():
+            all_affected_msans.update(base_records[bng_mask]['MSANCODE'])
+        
+        all_affected_msans.update(path_affected_msans)
         
         # Return DataFrame with affected MSANs
         return pd.DataFrame({'MSANCODE': list(all_affected_msans)})
@@ -719,12 +762,22 @@ class UnifiedNetworkImpactAnalyzer:
 
     # Returniung all nodes in the exchange - FIXED VERSION, Case 'MEETGHAMR1...DK' '07-1-10-36'
     def _get_exchange_nodes(self, dwn_exchange):
-        """Get all nodes belonging to a specific exchange - FIXED VERSION - WITH CACHING"""
+        """Get all nodes belonging to a specific exchange - OPTIMIZED WITH CACHE LIMIT"""
 
         # Check cache first
         if dwn_exchange in self._exchange_nodes_cache:
             return self._exchange_nodes_cache[dwn_exchange]
-
+        
+        # ========== NEW: LIMIT CACHE SIZE ==========
+        # Prevent cache from growing too large (memory issue with many exchanges)
+        if len(self._exchange_nodes_cache) > 100:  # Keep only 100 most recent exchanges
+            # Remove the oldest entry (first item)
+            oldest_key = next(iter(self._exchange_nodes_cache))
+            self._exchange_nodes_cache.pop(oldest_key)
+            print(f"Cache limit reached, removed oldest entry: {oldest_key}")
+        # ========== END OF NEW CODE ==========
+        
+        # Get nodes from NOMS data
         all_nodes = self.df_noms[self.df_noms.nodesite == dwn_exchange]['nodename'].unique()
         
         print(f"Found {len(all_nodes)} nodes in exchange {dwn_exchange}")

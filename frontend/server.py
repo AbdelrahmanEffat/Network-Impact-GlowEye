@@ -24,9 +24,6 @@ app = FastAPI(
 env_path = Path(__file__).resolve().parents[0] / 'secrets.env'
 load_dotenv(dotenv_path=env_path)
 
-# Now you can access the environment variables
-
-
 # Get the current directory of this file
 current_dir = Path(__file__).parent
 
@@ -38,11 +35,11 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 templates_dir = current_dir / "templates"
 templates = Jinja2Templates(directory=templates_dir)
 
-# Configuration - update with your API URL
+# Configuration
 print("directory", Path(__file__).resolve())
 print(os.getenv('BACKEND_API'))
 print(os.getenv('PORT'))
-API_BASE_URL = os.getenv('BACKEND_API') # "http://localhost:8000"
+API_BASE_URL = os.getenv('BACKEND_API')  # "http://localhost:8000"
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
@@ -101,6 +98,126 @@ async def analyze_network_impact(
             "error.html", 
             {"request": request, "error": error_msg}
         )
+
+
+# ========== NEW PAGINATION PROXY ENDPOINTS ==========
+
+@app.get("/api/we-data")
+async def proxy_we_data(
+    page: int = 1,
+    per_page: int = 50,
+    msancode: str = "",
+    impact: str = "",
+    edge: str = "",
+    distribution: str = "",
+    bng: str = ""
+):
+    """Proxy WE data pagination to backend API"""
+    try:
+        params = {
+            'page': page,
+            'per_page': per_page,
+            'msancode': msancode,
+            'impact': impact,
+            'edge': edge,
+            'distribution': distribution,
+            'bng': bng
+        }
+        
+        # Remove empty params
+        params = {k: v for k, v in params.items() if v}
+        
+        api_url = f"{API_BASE_URL}/api/we-data"
+        response = requests.get(api_url, params=params)
+        
+        if response.status_code != 200:
+            raise HTTPException(status_code=response.status_code, detail=response.text)
+        
+        return response.json()
+        
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=500, detail=f"Backend connection failed: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Proxy failed: {str(e)}")
+
+
+@app.get("/api/others-data")
+async def proxy_others_data(
+    page: int = 1,
+    per_page: int = 50,
+    msancode: str = "",
+    impact: str = "",
+    edge: str = "",
+    bitstream: str = "",
+    isp: str = "",
+    service: str = ""
+):
+    """Proxy Others data pagination to backend API"""
+    try:
+        params = {
+            'page': page,
+            'per_page': per_page,
+            'msancode': msancode,
+            'impact': impact,
+            'edge': edge,
+            'bitstream': bitstream,
+            'isp': isp,
+            'service': service
+        }
+        
+        # Remove empty params
+        params = {k: v for k, v in params.items() if v}
+        
+        api_url = f"{API_BASE_URL}/api/others-data"
+        response = requests.get(api_url, params=params)
+        
+        if response.status_code != 200:
+            raise HTTPException(status_code=response.status_code, detail=response.text)
+        
+        return response.json()
+        
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=500, detail=f"Backend connection failed: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Proxy failed: {str(e)}")
+
+
+@app.get("/api/filter-options/we")
+async def proxy_we_filter_options():
+    """Proxy WE filter options to backend API"""
+    try:
+        api_url = f"{API_BASE_URL}/api/filter-options/we"
+        response = requests.get(api_url)
+        
+        if response.status_code != 200:
+            raise HTTPException(status_code=response.status_code, detail=response.text)
+        
+        return response.json()
+        
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=500, detail=f"Backend connection failed: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Proxy failed: {str(e)}")
+
+
+@app.get("/api/filter-options/others")
+async def proxy_others_filter_options():
+    """Proxy Others filter options to backend API"""
+    try:
+        api_url = f"{API_BASE_URL}/api/filter-options/others"
+        response = requests.get(api_url)
+        
+        if response.status_code != 200:
+            raise HTTPException(status_code=response.status_code, detail=response.text)
+        
+        return response.json()
+        
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=500, detail=f"Backend connection failed: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Proxy failed: {str(e)}")
+
+# ========== END OF NEW PAGINATION ENDPOINTS ==========
 
 
 @app.post("/download")
@@ -170,4 +287,4 @@ async def get_detailed_data(identifier, identifier_type, data_type):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=4401)
+    uvicorn.run(app, host="0.0.0.0", port=8001)

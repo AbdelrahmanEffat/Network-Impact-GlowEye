@@ -39,6 +39,7 @@ app = FastAPI(
     version="2.0.0"
 )
 
+
 # Request model
 class AnalysisRequest(BaseModel):
     identifier: str
@@ -274,75 +275,168 @@ async def analyze_network_impact_complete(request: AnalysisRequest):
         raise HTTPException(status_code=500, detail=f"Complete analysis failed: {str(e)}")
 
 
-@app.post("/analyze", response_model=AnalysisResponse)
-async def analyze_network_impact(request: AnalysisRequest):
-    """
-    Analyze network impact from node or exchange failure for both WE and Others data
-    """
-    if we_analyzer is None or others_analyzer is None:
-        raise HTTPException(
-            status_code=503, 
-            detail="Service not ready - analyzers not initialized"
-        )
+# ADD THESE NEW ENDPOINTS to server_back.py
+
+@app.get("/api/we-data")
+async def get_we_data_paginated(
+    page: int = 1,
+    per_page: int = 50,
+    msancode: str = "",
+    impact: str = "",
+    edge: str = "",
+    distribution: str = "",
+    bng: str = ""
+):
+    """Paginated WE data endpoint"""
+    global latest_we_results
+    
+    if latest_we_results is None or latest_we_results.empty:
+        raise HTTPException(status_code=404, detail="No WE data available. Run analysis first.")
     
     try:
-        logger.info(f"Starting impact analysis for {request.identifier} (type: {request.identifier_type})")
+        # Start with full results
+        filtered_data = latest_we_results.copy()
         
-        start_time = time.time()
+        # Apply filters
+        if msancode:
+            filtered_data = filtered_data[
+                filtered_data['MSANCODE'].astype(str).str.contains(msancode, case=False, na=False)
+            ]
+        if impact:
+            filtered_data = filtered_data[filtered_data['Impact'] == impact]
+        if edge:
+            filtered_data = filtered_data[filtered_data['EDGE'] == edge]
+        if distribution and 'distribution_hostname' in filtered_data.columns:
+            filtered_data = filtered_data[filtered_data['distribution_hostname'] == distribution]
+        if bng and 'BNG_HOSTNAME' in filtered_data.columns:
+            filtered_data = filtered_data[filtered_data['BNG_HOSTNAME'] == bng]
         
-        # Use precomputed base results and only run impact analysis
-        we_analyzer.final_df = we_base_results
-        others_analyzer.final_df = others_base_results
+        # Calculate pagination
+        total_records = len(filtered_data)
+        total_pages = max(1, (total_records + per_page - 1) // per_page)
         
-        # Run the impact analysis on both data types
-        if request.identifier_type == 'exchange' or (request.identifier_type == 'auto' and _is_exchange_identifier(request.identifier)):
-            we_results = we_analyzer.analyze_exchange_impact(request.identifier)
-            we_results = we_results.drop_duplicates(subset=['MSANCODE', 'STATUS'])
-            others_results = others_analyzer.analyze_exchange_impact(request.identifier)
-            analysis_type = "Exchange"
-        else:
-            we_results = we_analyzer.analyze_node_impact(request.identifier)
-            others_results = others_analyzer.analyze_node_impact(request.identifier)
-            analysis_type = "Node"
+        # Paginate
+        start_idx = (page - 1) * per_page
+        end_idx = start_idx + per_page
+        paginated_data = filtered_data.iloc[start_idx:end_idx]
         
-        execution_time = time.time() - start_time
+        # Convert to serializable format
+        data_serializable = convert_dataframe_to_serializable(paginated_data)
         
-        # Create impact summaries
-        we_impact_summary = _create_impact_summary(we_results)
-        others_impact_summary = _create_impact_summary(others_results)
-        
-        # Get previews
-        we_preview = _get_results_preview(we_results)
-        others_preview = _get_results_preview(others_results)
-        
-        # Combine results
-        combined_impact_summary = {
-            "we": we_impact_summary,
-            "others": others_impact_summary,
-            "total_records": we_impact_summary.get("total_records", 0) + others_impact_summary.get("total_records", 0),
-            "total_unique_msans": we_impact_summary.get("unique_msans", 0) + others_impact_summary.get("unique_msans", 0)
+        return {
+            'data': data_serializable,
+            'total': total_records,
+            'page': page,
+            'per_page': per_page,
+            'total_pages': total_pages
         }
         
-        return AnalysisResponse(
-            status="success",
-            message=f"Analysis completed successfully for {request.identifier}",
-            total_records=combined_impact_summary["total_records"],
-            unique_msans=combined_impact_summary["total_unique_msans"],
-            analysis_type=analysis_type,
-            execution_time_seconds=round(execution_time, 3),
-            results_preview={
-                "we": we_preview,
-                "others": others_preview
-            },
-            impact_summary=combined_impact_summary
-        )
+    except Exception as e:
+        logger.error(f"Error in get_we_data_paginated: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Pagination failed: {str(e)}")
+
+
+@app.get("/api/others-data")
+async def get_others_data_paginated(
+    page: int = 1,
+    per_page: int = 50,
+    msancode: str = "",
+    impact: str = "",
+    edge: str = "",
+    bitstream: str = "",
+    isp: str = "",
+    service: str = ""
+):
+    """Paginated Others data endpoint"""
+    global latest_others_results
+    
+    if latest_others_results is None or latest_others_results.empty:
+        raise HTTPException(status_code=404, detail="No Others data available. Run analysis first.")
+    
+    try:
+        # Start with full results
+        filtered_data = latest_others_results.copy()
+        
+        # Apply filters
+        if msancode:
+            filtered_data = filtered_data[
+                filtered_data['MSANCODE'].astype(str).str.contains(msancode, case=False, na=False)
+            ]
+        if impact:
+            filtered_data = filtered_data[filtered_data['Impact'] == impact]
+        if edge:
+            filtered_data = filtered_data[filtered_data['EDGE'] == edge]
+        if bitstream and 'BITSTREAM_HOSTNAME' in filtered_data.columns:
+            filtered_data = filtered_data[filtered_data['BITSTREAM_HOSTNAME'] == bitstream]
+        if isp and 'ISP' in filtered_data.columns:
+            filtered_data = filtered_data[filtered_data['ISP'] == isp]
+        if service and 'SERVICE' in filtered_data.columns:
+            filtered_data = filtered_data[filtered_data['SERVICE'] == service]
+        
+        # Calculate pagination
+        total_records = len(filtered_data)
+        total_pages = max(1, (total_records + per_page - 1) // per_page)
+        
+        # Paginate
+        start_idx = (page - 1) * per_page
+        end_idx = start_idx + per_page
+        paginated_data = filtered_data.iloc[start_idx:end_idx]
+        
+        # Convert to serializable format
+        data_serializable = convert_dataframe_to_serializable(paginated_data)
+        
+        return {
+            'data': data_serializable,
+            'total': total_records,
+            'page': page,
+            'per_page': per_page,
+            'total_pages': total_pages
+        }
         
     except Exception as e:
-        logger.error(f"Analysis failed for {request.identifier}: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Analysis failed: {str(e)}"
-        )
+        logger.error(f"Error in get_others_data_paginated: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Pagination failed: {str(e)}")
+
+
+@app.get("/api/filter-options/we")
+async def get_we_filter_options():
+    """Get unique values for WE filters"""
+    global latest_we_results
+    
+    if latest_we_results is None or latest_we_results.empty:
+        return {"edges": [], "distributions": [], "bngs": [], "impacts": []}
+    
+    try:
+        return {
+            "edges": latest_we_results['EDGE'].unique().tolist() if 'EDGE' in latest_we_results.columns else [],
+            "distributions": latest_we_results['distribution_hostname'].unique().tolist() if 'distribution_hostname' in latest_we_results.columns else [],
+            "bngs": latest_we_results['BNG_HOSTNAME'].unique().tolist() if 'BNG_HOSTNAME' in latest_we_results.columns else [],
+            "impacts": latest_we_results['Impact'].unique().tolist() if 'Impact' in latest_we_results.columns else []
+        }
+    except Exception as e:
+        logger.error(f"Error getting WE filter options: {str(e)}")
+        return {"edges": [], "distributions": [], "bngs": [], "impacts": []}
+
+
+@app.get("/api/filter-options/others")
+async def get_others_filter_options():
+    """Get unique values for Others filters"""
+    global latest_others_results
+    
+    if latest_others_results is None or latest_others_results.empty:
+        return {"edges": [], "bitstreams": [], "isps": [], "services": [], "impacts": []}
+    
+    try:
+        return {
+            "edges": latest_others_results['EDGE'].unique().tolist() if 'EDGE' in latest_others_results.columns else [],
+            "bitstreams": latest_others_results['BITSTREAM_HOSTNAME'].unique().tolist() if 'BITSTREAM_HOSTNAME' in latest_others_results.columns else [],
+            "isps": latest_others_results['ISP'].unique().tolist() if 'ISP' in latest_others_results.columns else [],
+            "services": latest_others_results['SERVICE'].unique().tolist() if 'SERVICE' in latest_others_results.columns else [],
+            "impacts": latest_others_results['Impact'].unique().tolist() if 'Impact' in latest_others_results.columns else []
+        }
+    except Exception as e:
+        logger.error(f"Error getting Others filter options: {str(e)}")
+        return {"edges": [], "bitstreams": [], "isps": [], "services": [], "impacts": []}
 
 
 @app.post("/analyze/csv")
@@ -466,68 +560,8 @@ async def debug_columns():
         "others_memory_usage": latest_others_results.memory_usage(deep=True).sum() if not latest_others_results.empty else 0
     }
 
-@app.post("/analyze/detailed")
-async def analyze_network_impact_detailed(request: AnalysisRequest):
-    """Get detailed analysis results including full data"""
-    if we_analyzer is None or others_analyzer is None:
-        raise HTTPException(status_code=503, detail="Service not ready")
-    
-    try:
-        logger.info(f"Starting detailed analysis for {request.identifier}")
-        
-        # Use precomputed base results and only run impact analysis
-        we_analyzer.final_df = we_base_results
-        others_analyzer.final_df = others_base_results
-        
-        # Run the impact analysis on both data types
-        if request.identifier_type == 'exchange' or (request.identifier_type == 'auto' and _is_exchange_identifier(request.identifier)):
-            we_results = we_analyzer.analyze_exchange_impact(request.identifier)
-            others_results = others_analyzer.analyze_exchange_impact(request.identifier)
-        else:
-            we_results = we_analyzer.analyze_node_impact(request.identifier)
-            others_results = others_analyzer.analyze_node_impact(request.identifier)
-
-        # Add Route_Status column to both results
-        we_results['Route_Status'] = we_results.apply(
-            lambda row: we_analyzer._calculate_route_status(row['Path'], row['Path2']),  # FIXED METHOD NAME
-            axis=1
-        )
-        others_results['Route_Status'] = others_results.apply(
-            lambda row: others_analyzer._calculate_route_status(row['Path'], row['Path2']),  # FIXED METHOD NAME
-            axis=1
-        )
-
-        # Convert NaN values to None (which becomes null in JSON)
-        def replace_nan_with_none(obj):
-            if isinstance(obj, dict):
-                return {k: replace_nan_with_none(v) for k, v in obj.items()}
-            elif isinstance(obj, list):
-                return [replace_nan_with_none(v) for v in obj]
-            elif pd.isna(obj):  # This handles both NaN and NaT values
-                return None
-            else:
-                return obj
-        
-        # Convert to dict first, then clean NaN values
-        we_results_dict = we_results.to_dict(orient='records')
-        others_results_dict = others_results.to_dict(orient='records')
-        
-        # Clean NaN values from both results
-        we_results_clean = replace_nan_with_none(we_results_dict)
-        others_results_clean = replace_nan_with_none(others_results_dict)
-        
-        return {
-            "we_results": we_results_clean,
-            "others_results": others_results_clean
-        }
-    except Exception as e:
-        logger.error(f"Detailed analysis failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Detailed analysis failed: {str(e)}")
-
-# --- 3️⃣ Display result ---
 
 
-# Add statistics calculation functions
 def _calculate_we_statistics(we_results):
     """Calculate WE statistics (moved from frontend)"""
     if we_results.empty:

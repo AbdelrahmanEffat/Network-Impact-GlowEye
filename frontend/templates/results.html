@@ -9,6 +9,26 @@
     <link rel="stylesheet" href="/static/css/dashboard.css">
     <link rel="stylesheet" href="/static/css/dashboard-o.css">
     <style>
+        .spinner-border {
+            display: inline-block;
+            width: 2rem;
+            height: 2rem;
+            border: 0.25em solid #f3f3f3;
+            border-top: 0.25em solid #2196F3;
+            border-radius: 50%;
+            animation: spinner-rotation 1s linear infinite;
+        }
+
+        @keyframes spinner-rotation {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .btn-secondary:disabled,
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
         .isp-breakdown-section {
             margin-top: 30px;
             padding: 20px;
@@ -325,55 +345,30 @@
                         </div>
                     </div>
                     
-                    {% if we_data is defined and not we_data.empty %}
-                    <!-- Replace the existing WE Data filter controls -->
+                    <!-- NEW: Simplified filters -->
                     <div class="filter-controls">
-                        <select class="filter-select" data-column="0">
-                            <option value="">All MSANCODE</option>
-                            {% if we_data is defined and not we_data.empty %}
-                                {% for value in we_data.MSANCODE.unique() %}
-                                    <option value="{{ value }}">{{ value }}</option>
-                                {% endfor %}
-                            {% endif %}
-                        </select>
+                        <input type="text" id="we-msan-search" class="filter-search" placeholder="Search MSANCODE...">
                         
-                        <select class="filter-select" data-column="1">
-                            <option value="">All EDGE</option>
-                            {% if we_data is defined and not we_data.empty %}
-                                {% for value in we_data.EDGE.unique() %}
-                                    <option value="{{ value }}">{{ value }}</option>
-                                {% endfor %}
-                            {% endif %}
-                        </select>
-                        
-                        <select class="filter-select" data-column="2">
-                            <option value="">All Distribution</option>
-                            {% if we_data is defined and not we_data.empty %}
-                                {% for value in we_data.distribution_hostname.unique() %}
-                                    <option value="{{ value }}">{{ value }}</option>
-                                {% endfor %}
-                            {% endif %}
-                        </select>
-                        
-                        <select class="filter-select" data-column="3">
-                            <option value="">All BNG</option>
-                            {% if we_data is defined and not we_data.empty %}
-                                {% for value in we_data.BNG_HOSTNAME.unique() %}
-                                    <option value="{{ value }}">{{ value }}</option>
-                                {% endfor %}
-                            {% endif %}
-                        </select>
-                        
-                        <select class="filter-select" data-column="8">
+                        <select class="filter-select" id="we-impact-filter">
                             <option value="">All Impact</option>
-                            {% if we_data is defined and not we_data.empty %}
-                                {% for value in we_data.Impact.unique() %}
-                                    <option value="{{ value }}">{{ value }}</option>
-                                {% endfor %}
-                            {% endif %}
+                            <option value="Isolated">Isolated</option>
+                            <option value="Path Changed">Path Changed</option>
+                            <option value="Partial">Partial</option>
                         </select>
+                        
+                        <button id="we-apply-filter" class="btn-primary" style="padding: 8px 20px;">Apply Filter</button>
+                        <button id="we-reset-filter" class="btn-secondary" style="padding: 8px 20px;">Reset</button>
                     </div>
                     
+                    <!-- NEW: Loading indicator -->
+                    <div id="we-loading" style="text-align: center; padding: 20px; display: none;">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p>Loading data...</p>
+                    </div>
+                    
+                    <!-- Modified table container -->
                     <div class="table-container">
                         <table id="we-table" class="data-table">
                             <thead>
@@ -382,55 +377,41 @@
                                     <th>EDGE</th>
                                     <th>Distribution Hostname</th>
                                     <th>BNG Hostname</th>
-                                    <th>IGW Hostname</th>
-                                    <th>IGW Interface</th>
                                     <th>Status</th>
                                     <th>Customer Count</th>
-                                    <th>Voice-Customer Count</th>
-                                    <th>Data-Customer Count</th>
                                     <th>Impact</th>
                                     <th>cir_type</th>
                                     <th>Route_Status</th>
                                     <th>Physical Path</th>
                                     <th>Backup Physical Path</th>
-                                    <th>BNG2IGW</th>
                                 </tr>
                             </thead>
-                            <tbody>
-                                {% for record in we_data.to_dict('records') %}
-                                <tr class="impact-{{ record.Impact.lower().replace(' ', '-') if record.Impact else 'unknown' }}">
-                                    <td>{{ record.MSANCODE }}</td>
-                                    <td>{{ record.EDGE }}</td>
-                                    <td>{{ record.distribution_hostname }}</td>
-                                    <td>{{ record.BNG_HOSTNAME }}</td>
-                                    <td>{{ record.igw_hostname }}</td>
-                                    <td>{{ record.igw_interfaces }}</td>
-                                    <td>{{ record.STATUS }}</td>
-                                    <td>{{ record.CUST }}</td>
-                                    <td>{{ record.TOTAL_VOICE_CUST }}</td>
-                                    <td>{{ record.TOTAL_DATA_CUST }}</td>
-                                    <td>{{ record.Impact }}</td>
-                                    <td>{{ record.cir_type }}</td>
-                                    <td class="route-status-{{ record.Route_Status.lower().replace(' ', '-') if record.Route_Status else 'unknown' }}">
-                                        {{ record.Route_Status }}
+                            <tbody id="we-table-body">
+                                <!-- Data will be loaded via AJAX -->
+                                <tr>
+                                    <td colspan="11" style="text-align: center; padding: 20px;">
+                                        Click "Apply Filter" or load will start automatically...
                                     </td>
-                                    <td>{{ record.Path }}</td>
-                                    <td>{{ record.Path2 }}</td>
-                                    <td>{{ record.bngToIgw }}</td>
                                 </tr>
-                                {% endfor %}
                             </tbody>
                         </table>
                     </div>
-                    {% else %}
-                    <p>No WE data available for this analysis.</p>
-                    <!-- Add this after each table container -->
-                    <div class="pagination-controls">
-                        <button id="prevPage">Previous</button>
-                        <span id="pageInfo">Page 1 of 1</span>
-                        <button id="nextPage">Next</button>
+                    
+                    <!-- NEW: Pagination controls -->
+                    <div class="pagination-controls" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 20px;">
+                        <button id="we-first-page" class="btn-secondary">First</button>
+                        <button id="we-prev-page" class="btn-secondary">Previous</button>
+                        <span id="we-page-info" style="margin: 0 15px;">Page 1 of 1</span>
+                        <button id="we-next-page" class="btn-secondary">Next</button>
+                        <button id="we-last-page" class="btn-secondary">Last</button>
+                        
+                        <select id="we-per-page" style="margin-left: 20px; padding: 8px;">
+                            <option value="25">25 per page</option>
+                            <option value="50" selected>50 per page</option>
+                            <option value="100">100 per page</option>
+                            <option value="200">200 per page</option>
+                        </select>
                     </div>
-                    {% endif %}
                 </div>
             </div>
             
@@ -449,45 +430,30 @@
                         </div>
                     </div>
                     
-                    {% if others_data is defined and not others_data.empty %}
-                    <!-- Replace the existing Others Data filter controls -->
+                    <!-- Filters -->
                     <div class="filter-controls">
-                        <select class="filter-select" data-column="0">
-                            <option value="">All MSANCODE</option>
-                            {% if others_data is defined and not others_data.empty %}
-                                {% for value in others_data.MSANCODE.unique() %}
-                                    <option value="{{ value }}">{{ value }}</option>
-                                {% endfor %}
-                            {% endif %}
-                        </select>
+                        <input type="text" id="others-msan-search" class="filter-search" placeholder="Search MSANCODE...">
                         
-                        <select class="filter-select" data-column="1">
-                            <option value="">All EDGE</option>
-                            {% if others_data is defined and not others_data.empty %}
-                                {% for value in others_data.EDGE.unique() %}
-                                    <option value="{{ value }}">{{ value }}</option>
-                                {% endfor %}
-                            {% endif %}
-                        </select>
-                        
-                        <select class="filter-select" data-column="2">
-                            <option value="">All Bitstream</option>
-                            {% if others_data is defined and not others_data.empty %}
-                                {% for value in others_data.BITSTREAM_HOSTNAME.unique() %}
-                                    <option value="{{ value }}">{{ value }}</option>
-                                {% endfor %}
-                            {% endif %}
-                        </select>
-                        
-                        <select class="filter-select" data-column="5">
+                        <select class="filter-select" id="others-impact-filter">
                             <option value="">All Impact</option>
-                            {% if others_data is defined and not others_data.empty %}
-                                {% for value in others_data.Impact.unique() %}
-                                    <option value="{{ value }}">{{ value }}</option>
-                                {% endfor %}
-                            {% endif %}
+                            <option value="Isolated">Isolated</option>
+                            <option value="Path Changed">Path Changed</option>
+                            <option value="Partial">Partial</option>
                         </select>
+                        
+                        <button id="others-apply-filter" class="btn-primary" style="padding: 8px 20px;">Apply Filter</button>
+                        <button id="others-reset-filter" class="btn-secondary" style="padding: 8px 20px;">Reset</button>
                     </div>
+                    
+                    <!-- Loading indicator -->
+                    <div id="others-loading" style="text-align: center; padding: 20px; display: none;">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p>Loading data...</p>
+                    </div>
+                    
+                    <!-- Table -->
                     <div class="table-container">
                         <table id="others-table" class="data-table">
                             <thead>
@@ -503,34 +469,31 @@
                                     <th>Backup Physical Path</th>
                                 </tr>
                             </thead>
-                            <tbody>
-                                {% for record in others_data.to_dict('records') %}
-                                <tr class="impact-{{ record.Impact.lower().replace(' ', '-') if record.Impact else 'unknown' }}">
-                                    <td>{{ record.MSANCODE }}</td>
-                                    <td>{{ record.EDGE }}</td>
-                                    <td>{{ record.BITSTREAM_HOSTNAME }}</td>
-                                    <td>{{ record.SERVICE }}</td>
-                                    <td>{{ record.ISP }}</td>
-                                    <td>{{ record.Impact }}</td>
-                                    <td class="route-status-{{ record.Route_Status.lower().replace(' ', '-') if record.Route_Status else 'unknown' }}">
-                                        {{ record.Route_Status }}
+                            <tbody id="others-table-body">
+                                <tr>
+                                    <td colspan="9" style="text-align: center; padding: 20px;">
+                                        Click "Apply Filter" or load will start automatically...
                                     </td>
-                                    <td>{{ record.Path }}</td>
-                                    <td>{{ record.Path2 }}</td>
                                 </tr>
-                                {% endfor %}
                             </tbody>
                         </table>
                     </div>
-                    {% else %}
-                    <p>No Others data available for this analysis.</p>
-                    <!-- Add this after each table container -->
-                    <div class="pagination-controls">
-                        <button id="prevPage">Previous</button>
-                        <span id="pageInfo">Page 1 of 1</span>
-                        <button id="nextPage">Next</button>
+                    
+                    <!-- Pagination -->
+                    <div class="pagination-controls" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 20px;">
+                        <button id="others-first-page" class="btn-secondary">First</button>
+                        <button id="others-prev-page" class="btn-secondary">Previous</button>
+                        <span id="others-page-info" style="margin: 0 15px;">Page 1 of 1</span>
+                        <button id="others-next-page" class="btn-secondary">Next</button>
+                        <button id="others-last-page" class="btn-secondary">Last</button>
+                        
+                        <select id="others-per-page" style="margin-left: 20px; padding: 8px;">
+                            <option value="25">25 per page</option>
+                            <option value="50" selected>50 per page</option>
+                            <option value="100">100 per page</option>
+                            <option value="200">200 per page</option>
+                        </select>
                     </div>
-                    {% endif %}
                 </div>
             </div>
             
@@ -1076,6 +1039,250 @@
         othersData: othersData ? othersData.length : 0,
         identifier: identifier,
         identifierType: identifierType
+    });
+
+    // ADD THIS NEW CLASS - Don't replace anything
+    class DataTableLoader {
+        constructor(tableId, apiEndpoint, tableType) {
+            this.tableId = tableId;
+            this.apiEndpoint = apiEndpoint;
+            this.tableType = tableType; // 'we' or 'others'
+            this.currentPage = 1;
+            this.perPage = 50;
+            this.totalPages = 1;
+            this.filters = {};
+            this.dataLoaded = false;
+        }
+        
+        async loadData() {
+            const loadingEl = document.getElementById(`${this.tableType}-loading`);
+            const tbody = document.getElementById(`${this.tableId}-body`);
+            
+            // Show loading
+            if (loadingEl) loadingEl.style.display = 'block';
+            if (tbody) tbody.innerHTML = '<tr><td colspan="11" style="text-align: center;">Loading...</td></tr>';
+            
+            try {
+                const params = new URLSearchParams({
+                    page: this.currentPage,
+                    per_page: this.perPage,
+                    ...this.filters
+                });
+                
+                const response = await fetch(`${this.apiEndpoint}?${params}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                
+                if (result.error) {
+                    throw new Error(result.error);
+                }
+                
+                // Clear table
+                tbody.innerHTML = '';
+                
+                // Populate table
+                if (result.data && result.data.length > 0) {
+                    result.data.forEach(record => {
+                        const row = this.createTableRow(record);
+                        tbody.appendChild(row);
+                    });
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="11" style="text-align: center;">No data found</td></tr>';
+                }
+                
+                // Update pagination
+                this.totalPages = result.total_pages || 1;
+                this.updatePaginationUI(result);
+                
+                this.dataLoaded = true;
+                
+            } catch (error) {
+                console.error('Error loading data:', error);
+                tbody.innerHTML = `<tr><td colspan="11" style="text-align: center; color: red;">Error: ${error.message}</td></tr>`;
+            } finally {
+                if (loadingEl) loadingEl.style.display = 'none';
+            }
+        }
+        
+        createTableRow(record) {
+            const row = document.createElement('tr');
+            row.className = `impact-${(record.Impact || 'unknown').toLowerCase().replace(' ', '-')}`;
+            
+            if (this.tableType === 'we') {
+                row.innerHTML = `
+                    <td>${record.MSANCODE || ''}</td>
+                    <td>${record.EDGE || ''}</td>
+                    <td>${record.distribution_hostname || ''}</td>
+                    <td>${record.BNG_HOSTNAME || ''}</td>
+                    <td>${record.STATUS || ''}</td>
+                    <td>${record.CUST || ''}</td>
+                    <td>${record.Impact || ''}</td>
+                    <td>${record.cir_type || ''}</td>
+                    <td class="route-status-${(record.Route_Status || 'unknown').toLowerCase().replace(' ', '-')}">${record.Route_Status || ''}</td>
+                    <td>${this.formatPath(record.Path)}</td>
+                    <td>${this.formatPath(record.Path2)}</td>
+                `;
+            } else {
+                row.innerHTML = `
+                    <td>${record.MSANCODE || ''}</td>
+                    <td>${record.EDGE || ''}</td>
+                    <td>${record.BITSTREAM_HOSTNAME || ''}</td>
+                    <td>${record.SERVICE || ''}</td>
+                    <td>${record.ISP || ''}</td>
+                    <td>${record.Impact || ''}</td>
+                    <td class="route-status-${(record.Route_Status || 'unknown').toLowerCase().replace(' ', '-')}">${record.Route_Status || ''}</td>
+                    <td>${this.formatPath(record.Path)}</td>
+                    <td>${this.formatPath(record.Path2)}</td>
+                `;
+            }
+            
+            return row;
+        }
+        
+        formatPath(path) {
+            if (!path) return '';
+            if (typeof path === 'string') return path;
+            if (Array.isArray(path)) return path.join(' → ');
+            return JSON.stringify(path);
+        }
+        
+        updatePaginationUI(result) {
+            const pageInfo = document.getElementById(`${this.tableType}-page-info`);
+            if (pageInfo) {
+                pageInfo.textContent = `Page ${result.page} of ${result.total_pages} (${result.total} records)`;
+            }
+            
+            const prevBtn = document.getElementById(`${this.tableType}-prev-page`);
+            const nextBtn = document.getElementById(`${this.tableType}-next-page`);
+            const firstBtn = document.getElementById(`${this.tableType}-first-page`);
+            const lastBtn = document.getElementById(`${this.tableType}-last-page`);
+            
+            if (prevBtn) prevBtn.disabled = this.currentPage === 1;
+            if (firstBtn) firstBtn.disabled = this.currentPage === 1;
+            if (nextBtn) nextBtn.disabled = this.currentPage >= this.totalPages;
+            if (lastBtn) lastBtn.disabled = this.currentPage >= this.totalPages;
+        }
+        
+        nextPage() {
+            if (this.currentPage < this.totalPages) {
+                this.currentPage++;
+                this.loadData();
+            }
+        }
+        
+        prevPage() {
+            if (this.currentPage > 1) {
+                this.currentPage--;
+                this.loadData();
+            }
+        }
+        
+        firstPage() {
+            this.currentPage = 1;
+            this.loadData();
+        }
+        
+        lastPage() {
+            this.currentPage = this.totalPages;
+            this.loadData();
+        }
+        
+        setPerPage(perPage) {
+            this.perPage = perPage;
+            this.currentPage = 1;
+            this.loadData();
+        }
+        
+        applyFilters(filters) {
+            this.filters = filters;
+            this.currentPage = 1;
+            this.loadData();
+        }
+    }
+
+    // Initialize loaders
+    let weDataLoader, othersDataLoader;
+
+    // MODIFY your existing DOMContentLoaded to include this:
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('Initializing paginated data loaders...');
+        
+        // Initialize WE data loader
+        weDataLoader = new DataTableLoader('we-table', '/api/we-data', 'we');
+        
+        // WE Pagination controls
+        document.getElementById('we-prev-page')?.addEventListener('click', () => weDataLoader.prevPage());
+        document.getElementById('we-next-page')?.addEventListener('click', () => weDataLoader.nextPage());
+        document.getElementById('we-first-page')?.addEventListener('click', () => weDataLoader.firstPage());
+        document.getElementById('we-last-page')?.addEventListener('click', () => weDataLoader.lastPage());
+        document.getElementById('we-per-page')?.addEventListener('change', (e) => weDataLoader.setPerPage(parseInt(e.target.value)));
+        
+        // WE Filters
+        document.getElementById('we-apply-filter')?.addEventListener('click', () => {
+            const filters = {
+                msancode: document.getElementById('we-msan-search')?.value || '',
+                impact: document.getElementById('we-impact-filter')?.value || ''
+            };
+            weDataLoader.applyFilters(filters);
+        });
+        
+        document.getElementById('we-reset-filter')?.addEventListener('click', () => {
+            document.getElementById('we-msan-search').value = '';
+            document.getElementById('we-impact-filter').value = '';
+            weDataLoader.applyFilters({});
+        });
+        
+        // Auto-load WE data when tab is clicked
+        document.querySelector('[data-tab="we-tab"]')?.addEventListener('click', function() {
+            if (!weDataLoader.dataLoaded) {
+                setTimeout(() => weDataLoader.loadData(), 100);
+            }
+        });
+        
+        // Initialize Others data loader
+        othersDataLoader = new DataTableLoader('others-table', '/api/others-data', 'others');
+        
+        // Others Pagination controls
+        document.getElementById('others-prev-page')?.addEventListener('click', () => othersDataLoader.prevPage());
+        document.getElementById('others-next-page')?.addEventListener('click', () => othersDataLoader.nextPage());
+        document.getElementById('others-first-page')?.addEventListener('click', () => othersDataLoader.firstPage());
+        document.getElementById('others-last-page')?.addEventListener('click', () => othersDataLoader.lastPage());
+        document.getElementById('others-per-page')?.addEventListener('change', (e) => othersDataLoader.setPerPage(parseInt(e.target.value)));
+        
+        // Others Filters
+        document.getElementById('others-apply-filter')?.addEventListener('click', () => {
+            const filters = {
+                msancode: document.getElementById('others-msan-search')?.value || '',
+                impact: document.getElementById('others-impact-filter')?.value || ''
+            };
+            othersDataLoader.applyFilters(filters);
+        });
+        
+        document.getElementById('others-reset-filter')?.addEventListener('click', () => {
+            document.getElementById('others-msan-search').value = '';
+            document.getElementById('others-impact-filter').value = '';
+            othersDataLoader.applyFilters({});
+        });
+        
+        // Auto-load Others data when tab is clicked
+        document.querySelector('[data-tab="others-tab"]')?.addEventListener('click', function() {
+            if (!othersDataLoader.dataLoaded) {
+                setTimeout(() => othersDataLoader.loadData(), 100);
+            }
+        });
+        
+        // Load WE data immediately if on WE tab
+        if (document.querySelector('[data-tab="we-tab"]')?.classList.contains('active')) {
+            setTimeout(() => weDataLoader.loadData(), 500);
+        }
+        
+        // Keep your existing initialization code below...
+        // initializeCharts();
+        // etc.
     });
 
     // Single DOMContentLoaded event listener
@@ -1682,6 +1889,7 @@
             alert('Download failed: ' + error.message);
         }
     }
+
     </script>
 </body>
 </html>
