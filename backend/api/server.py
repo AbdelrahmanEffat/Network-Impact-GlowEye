@@ -92,6 +92,7 @@ async def startup_event():
                 df_wan = pd.read_csv(f'{data_path}\\wan.csv', low_memory=False)
                 df_agg = pd.read_csv(f'{data_path}\\agg.csv', low_memory=False)
                 df_noms = pd.read_csv(f'{data_path}\\NOMS.csv', low_memory=False)
+                #print(df_report_we[df_report_we['MSANCODE']=='MSAN12345'])
             else:
                 # Load CSV files using the path from env
                 df_report_we = pd.read_csv(f'{data_path}/we_igw.csv', low_memory=False)  # WE data
@@ -125,7 +126,7 @@ async def startup_event():
             we_base_results = we_analyzer.generate_base_results("dummy_initialization")
             others_base_results = others_analyzer.generate_base_results("dummy_initialization")
             
-            logger.info(f"Data loaded successfully. WE shape: {df_report_we.shape}, Others shape: {df_report_others.shape}")
+            #logger.info(f"Data loaded successfully. WE shape: {df_report_we.shape}, Others shape: {df_report_others.shape}")
             logger.info(f"Base results computed. WE: {we_base_results.shape}, Others: {others_base_results.shape}")
             
         except Exception as e:
@@ -274,76 +275,6 @@ async def analyze_network_impact_complete(request: AnalysisRequest):
         raise HTTPException(status_code=500, detail=f"Complete analysis failed: {str(e)}")
 
 
-@app.post("/analyze", response_model=AnalysisResponse)
-async def analyze_network_impact(request: AnalysisRequest):
-    """
-    Analyze network impact from node or exchange failure for both WE and Others data
-    """
-    if we_analyzer is None or others_analyzer is None:
-        raise HTTPException(
-            status_code=503, 
-            detail="Service not ready - analyzers not initialized"
-        )
-    
-    try:
-        logger.info(f"Starting impact analysis for {request.identifier} (type: {request.identifier_type})")
-        
-        start_time = time.time()
-        
-        # Use precomputed base results and only run impact analysis
-        we_analyzer.final_df = we_base_results
-        others_analyzer.final_df = others_base_results
-        
-        # Run the impact analysis on both data types
-        if request.identifier_type == 'exchange' or (request.identifier_type == 'auto' and _is_exchange_identifier(request.identifier)):
-            we_results = we_analyzer.analyze_exchange_impact(request.identifier)
-            we_results = we_results.drop_duplicates(subset=['MSANCODE', 'STATUS'])
-            others_results = others_analyzer.analyze_exchange_impact(request.identifier)
-            analysis_type = "Exchange"
-        else:
-            we_results = we_analyzer.analyze_node_impact(request.identifier)
-            others_results = others_analyzer.analyze_node_impact(request.identifier)
-            analysis_type = "Node"
-        
-        execution_time = time.time() - start_time
-        
-        # Create impact summaries
-        we_impact_summary = _create_impact_summary(we_results)
-        others_impact_summary = _create_impact_summary(others_results)
-        
-        # Get previews
-        we_preview = _get_results_preview(we_results)
-        others_preview = _get_results_preview(others_results)
-        
-        # Combine results
-        combined_impact_summary = {
-            "we": we_impact_summary,
-            "others": others_impact_summary,
-            "total_records": we_impact_summary.get("total_records", 0) + others_impact_summary.get("total_records", 0),
-            "total_unique_msans": we_impact_summary.get("unique_msans", 0) + others_impact_summary.get("unique_msans", 0)
-        }
-        
-        return AnalysisResponse(
-            status="success",
-            message=f"Analysis completed successfully for {request.identifier}",
-            total_records=combined_impact_summary["total_records"],
-            unique_msans=combined_impact_summary["total_unique_msans"],
-            analysis_type=analysis_type,
-            execution_time_seconds=round(execution_time, 3),
-            results_preview={
-                "we": we_preview,
-                "others": others_preview
-            },
-            impact_summary=combined_impact_summary
-        )
-        
-    except Exception as e:
-        logger.error(f"Analysis failed for {request.identifier}: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Analysis failed: {str(e)}"
-        )
-
 
 @app.post("/analyze/csv")
 async def analyze_and_return_csv(request: AnalysisRequest):
@@ -466,67 +397,6 @@ async def debug_columns():
         "others_memory_usage": latest_others_results.memory_usage(deep=True).sum() if not latest_others_results.empty else 0
     }
 
-@app.post("/analyze/detailed")
-async def analyze_network_impact_detailed(request: AnalysisRequest):
-    """Get detailed analysis results including full data"""
-    if we_analyzer is None or others_analyzer is None:
-        raise HTTPException(status_code=503, detail="Service not ready")
-    
-    try:
-        logger.info(f"Starting detailed analysis for {request.identifier}")
-        
-        # Use precomputed base results and only run impact analysis
-        we_analyzer.final_df = we_base_results
-        others_analyzer.final_df = others_base_results
-        
-        # Run the impact analysis on both data types
-        if request.identifier_type == 'exchange' or (request.identifier_type == 'auto' and _is_exchange_identifier(request.identifier)):
-            we_results = we_analyzer.analyze_exchange_impact(request.identifier)
-            others_results = others_analyzer.analyze_exchange_impact(request.identifier)
-        else:
-            we_results = we_analyzer.analyze_node_impact(request.identifier)
-            others_results = others_analyzer.analyze_node_impact(request.identifier)
-
-        # Add Route_Status column to both results
-        we_results['Route_Status'] = we_results.apply(
-            lambda row: we_analyzer._calculate_route_status(row['Path'], row['Path2']),  # FIXED METHOD NAME
-            axis=1
-        )
-        others_results['Route_Status'] = others_results.apply(
-            lambda row: others_analyzer._calculate_route_status(row['Path'], row['Path2']),  # FIXED METHOD NAME
-            axis=1
-        )
-
-        # Convert NaN values to None (which becomes null in JSON)
-        def replace_nan_with_none(obj):
-            if isinstance(obj, dict):
-                return {k: replace_nan_with_none(v) for k, v in obj.items()}
-            elif isinstance(obj, list):
-                return [replace_nan_with_none(v) for v in obj]
-            elif pd.isna(obj):  # This handles both NaN and NaT values
-                return None
-            else:
-                return obj
-        
-        # Convert to dict first, then clean NaN values
-        we_results_dict = we_results.to_dict(orient='records')
-        others_results_dict = others_results.to_dict(orient='records')
-        
-        # Clean NaN values from both results
-        we_results_clean = replace_nan_with_none(we_results_dict)
-        others_results_clean = replace_nan_with_none(others_results_dict)
-        
-        return {
-            "we_results": we_results_clean,
-            "others_results": others_results_clean
-        }
-    except Exception as e:
-        logger.error(f"Detailed analysis failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Detailed analysis failed: {str(e)}")
-
-# --- 3️⃣ Display result ---
-
-
 # Add statistics calculation functions
 def _calculate_we_statistics(we_results):
     """Calculate WE statistics (moved from frontend)"""
@@ -549,19 +419,19 @@ def _calculate_we_statistics(we_results):
         .sum()
         .rename(columns={'TOTAL_DATA_CUST': 'SUM_TOTAL_DATA_CUST_ST_REROUTED'})
     )
-    env_path = Path(__file__).resolve().parents[1] / 'secrets.env'
-    load_dotenv(dotenv_path=env_path)
+    # env_path = Path(__file__).resolve().parents[1] / 'secrets.env'
+    # load_dotenv(dotenv_path=env_path)
  
-    data_path = os.getenv('DATA_PATH')
-    value = os.getenv('PRODUCTION')
-    if value=='false':
-        df_report_we = pd.read_csv(f'{data_path}\\we.csv')  # WE data
-    else:
-        # Load CSV files using the path from env
-        df_report_we = pd.read_csv(f'{data_path}/we.csv')  # WE data
+    # data_path = os.getenv('DATA_PATH')
+    # value = os.getenv('PRODUCTION')
+    # if value=='false':
+    #     df_report_we = pd.read_csv(f'{data_path}\\we.csv')  # WE data
+    # else:
+    #     # Load CSV files using the path from env
+    #     df_report_we = pd.read_csv(f'{data_path}/we.csv')  # WE data
     #print("----- ST (Rerouted) Total per BNG -----")
     #print(st_rerouted_summary)
-    df_report_we_up = df_report_we[df_report_we['STATUS'] == 'UP']
+    df_report_we_up = we_results[we_results['STATUS'] == 'UP']
     we_up_sum = (
     df_report_we_up
     .groupby('BNG_HOSTNAME', as_index=False)['TOTAL_DATA_CUST']
@@ -719,7 +589,10 @@ def _calculate_others_statistics(others_results):
                     total_ftth += row.get('NOOR_HS_FTTH_CUST', 0)
         
         return total_ftth
-    
+   
+    isolated_results = others_results[others_results['Impact'].str.strip() == 'Isolated']
+    partial_results = others_results[others_results['Impact'].str.strip() == 'Partial']
+    path_results = others_results[others_results['Impact'].str.strip() == 'Path Changed']
     # Step 5: Return the statistics with updated customer counting
     return {
         # Counts of unique MSANs by category
@@ -733,65 +606,47 @@ def _calculate_others_statistics(others_results):
         'o_path_changed_vic': (path_changed_unique['VIC'] == 'VIC').sum() if not path_changed_unique.empty else 0,
         
         # Customer totals (only counting relevant ISP/service combinations)
-        'isolated_sub': count_affected_customers(isolated_data),
-        'partial_sub': count_affected_customers(partial_data),
-        'path_changed_sub': count_affected_customers(path_changed_data),
+        'isolated_sub': count_affected_customers(isolated_results)+count_affected_customers_ftth(isolated_results),
+        'partial_sub': count_affected_customers(partial_results)+count_affected_customers_ftth(partial_results),
+        'path_changed_sub': count_affected_customers(path_results)+count_affected_customers_ftth(path_results),
         
         # Vodafone statistics (using the new counting method)
-        'isolated_voda': count_affected_customers(isolated_data[isolated_data['ISP'] == 'VODAFONE']),
-        'isolated_voda_ubb': count_affected_customers(isolated_data[(isolated_data['ISP'] == 'VODAFONE') & (isolated_data['SERVICE'] == 'UBBT')]),
-        'isolated_voda_hs': count_affected_customers(isolated_data[(isolated_data['ISP'] == 'VODAFONE') & (isolated_data['SERVICE'] == 'HS-BT')]),
-        'isolated_voda_ubb_ftth': count_affected_customers_ftth(isolated_data[(isolated_data['ISP'] == 'VODAFONE') & (isolated_data['SERVICE'] == 'UBBT-FTTH')]),
-        'isolated_voda_hs_ftth': count_affected_customers_ftth(isolated_data[(isolated_data['ISP'] == 'VODAFONE') & (isolated_data['SERVICE'] == 'HS-BT-FTTH')]),
+        'isolated_voda': count_affected_customers(isolated_results[isolated_results['ISP'] == 'VODAFONE']),
+        'isolated_voda_ubb': count_affected_customers(isolated_results[(isolated_results['ISP'] == 'VODAFONE') & (isolated_results['SERVICE'] == 'UBBT')]),
+        'isolated_voda_hs': count_affected_customers(isolated_results[(isolated_results['ISP'] == 'VODAFONE') & (isolated_results['SERVICE'] == 'HS-BT')]),
+        'isolated_voda_ubb_ftth': count_affected_customers_ftth(isolated_results[(isolated_results['ISP'] == 'VODAFONE') & (isolated_results['SERVICE'] == 'UBBT-FTTH')]),
+        'isolated_voda_hs_ftth': count_affected_customers_ftth(isolated_results[(isolated_results['ISP'] == 'VODAFONE') & (isolated_results['SERVICE'] == 'HS-BT-FTTH')]),
         
         # Orange statistics
-        'isolated_orange': count_affected_customers(isolated_data[isolated_data['ISP'] == 'ORANGE']),
-        'isolated_orange_ubb': count_affected_customers(isolated_data[(isolated_data['ISP'] == 'ORANGE') & (isolated_data['SERVICE'] == 'UBBT')]),
-        'isolated_orange_hs': count_affected_customers(isolated_data[(isolated_data['ISP'] == 'ORANGE') & (isolated_data['SERVICE'] == 'HS-BT')]),
-        'isolated_orange_ubb_ftth': count_affected_customers_ftth(isolated_data[(isolated_data['ISP'] == 'ORANGE') & (isolated_data['SERVICE'] == 'UBBT-FTTH')]),
-        'isolated_orange_hs_ftth': count_affected_customers_ftth(isolated_data[(isolated_data['ISP'] == 'ORANGE') & (isolated_data['SERVICE'] == 'HS-BT-FTTH')]),
+        	'isolated_orange': count_affected_customers(isolated_results[isolated_results['ISP'] == 'ORANGE']),
+        'isolated_orange_ubb': count_affected_customers(isolated_results[(isolated_results['ISP'] == 'ORANGE') & (isolated_results['SERVICE'] == 'UBBT')]),
+        'isolated_orange_hs': count_affected_customers(isolated_results[(isolated_results['ISP'] == 'ORANGE') & (isolated_results['SERVICE'] == 'HS-BT')]),
+        'isolated_orange_ubb_ftth': count_affected_customers_ftth(isolated_results[(isolated_results['ISP'] == 'ORANGE') & (isolated_results['SERVICE'] == 'UBBT-FTTH')]),
+        'isolated_orange_hs_ftth': count_affected_customers_ftth(isolated_results[(isolated_results['ISP'] == 'ORANGE') & (isolated_results['SERVICE'] == 'HS-BT-FTTH')]),
         
         # Etisalat statistics
-        'isolated_etisalat': count_affected_customers(isolated_data[isolated_data['ISP'] == 'ETISALAT']),
-        'isolated_etisalat_ubb': count_affected_customers(isolated_data[(isolated_data['ISP'] == 'ETISALAT') & (isolated_data['SERVICE'] == 'UBBT')]),
-        'isolated_etisalat_hs': count_affected_customers(isolated_data[(isolated_data['ISP'] == 'ETISALAT') & (isolated_data['SERVICE'] == 'HS-BT')]),
-        'isolated_etisalat_ubb_ftth': count_affected_customers_ftth(isolated_data[(isolated_data['ISP'] == 'ETISALAT') & (isolated_data['SERVICE'] == 'UBBT-FTTH')]),
-        'isolated_etisalat_hs_ftth': count_affected_customers_ftth(isolated_data[(isolated_data['ISP'] == 'ETISALAT') & (isolated_data['SERVICE'] == 'HS-BT-FTTH')]),
+        'isolated_etisalat': count_affected_customers(isolated_results[isolated_results['ISP'] == 'ETISALAT']),
+        'isolated_etisalat_ubb': count_affected_customers(isolated_results[(isolated_results['ISP'] == 'ETISALAT') & (isolated_results['SERVICE'] == 'UBBT')]),
+        'isolated_etisalat_hs': count_affected_customers(isolated_results[(isolated_results['ISP'] == 'ETISALAT') & (isolated_results['SERVICE'] == 'HS-BT')]),
+        'isolated_etisalat_ubb_ftth': count_affected_customers_ftth(isolated_results[(isolated_results['ISP'] == 'ETISALAT') & (isolated_results['SERVICE'] == 'UBBT-FTTH')]),
+        'isolated_etisalat_hs_ftth': count_affected_customers_ftth(isolated_results[(isolated_results['ISP'] == 'ETISALAT') & (isolated_results['SERVICE'] == 'HS-BT-FTTH')]),
         
         # Noor statistics
-        'isolated_noor': count_affected_customers(isolated_data[isolated_data['ISP'] == 'NOOR']),
-        'isolated_noor_ubb': count_affected_customers(isolated_data[(isolated_data['ISP'] == 'NOOR') & (isolated_data['SERVICE'] == 'UBBT')]),
-        'isolated_noor_hs': count_affected_customers(isolated_data[(isolated_data['ISP'] == 'NOOR') & (isolated_data['SERVICE'] == 'HS-BT')]),
-        'isolated_noor_ubb_ftth': count_affected_customers_ftth(isolated_data[(isolated_data['ISP'] == 'NOOR') & (isolated_data['SERVICE'] == 'UBBT-FTTH')]),
-        'isolated_noor_hs_ftth': count_affected_customers_ftth(isolated_data[(isolated_data['ISP'] == 'NOOR') & (isolated_data['SERVICE'] == 'HS-BT-FTTH')]),
+        'isolated_noor': count_affected_customers(isolated_results[isolated_results['ISP'] == 'NOOR']),
+        'isolated_noor_ubb': count_affected_customers(isolated_results[(isolated_results['ISP'] == 'NOOR') & (isolated_results['SERVICE'] == 'UBBT')]),
+        'isolated_noor_hs': count_affected_customers(isolated_results[(isolated_results['ISP'] == 'NOOR') & (isolated_results['SERVICE'] == 'HS-BT')]),
+        'isolated_noor_ubb_ftth': count_affected_customers_ftth(isolated_results[(isolated_results['ISP'] == 'NOOR') & (isolated_results['SERVICE'] == 'UBBT-FTTH')]),
+        'isolated_noor_hs_ftth': count_affected_customers_ftth(isolated_results[(isolated_results['ISP'] == 'NOOR') & (isolated_results['SERVICE'] == 'HS-BT-FTTH')]),
         
         # Wrong VLAN statistics (these are already ISP-specific, so we can sum directly)
-        'wrong_noor': isolated_data['NOOR_WRONG_VLAN'].sum() if not isolated_data.empty else 0,
-        'wrong_voda': isolated_data['VODA_WORNG_VLAN'].sum() if not isolated_data.empty else 0,
-        'wrong_orange': isolated_data['ORANGE_WORNG_VLAN'].sum() if not isolated_data.empty else 0,
-        'wrong_ets': isolated_data['ETISLAT_WRONG_VLAN'].sum() if not isolated_data.empty else 0
+        'wrong_noor': isolated_unique['NOOR_WRONG_VLAN'].sum() if not isolated_unique.empty else 0,
+        'wrong_voda': isolated_unique['VODA_WORNG_VLAN'].sum() if not isolated_unique.empty else 0,
+        'wrong_orange': isolated_unique['ORANGE_WORNG_VLAN'].sum() if not isolated_unique.empty else 0,
+        'wrong_ets': isolated_unique['ETISLAT_WRONG_VLAN'].sum() if not isolated_unique.empty else 0
     }
 
 
 
-def _get_results_preview(results_df, num_records=5):
-    """Get preview of results with key columns"""
-    if results_df.empty:
-        return []
-    
-    preview_columns = [
-        'MSANCODE', 'EDGE', 'distribution_hostname', 'BNG_HOSTNAME', 
-        'STATUS', 'CUST', 'cir_type', 'Impact'
-    ]
-    
-    # Adjust columns based on available data
-    available_preview_cols = [col for col in preview_columns if col in results_df.columns]
-    
-    # Add BITSTREAM_HOSTNAME if available
-    if 'BITSTREAM_HOSTNAME' in results_df.columns and 'distribution_hostname' not in available_preview_cols:
-        available_preview_cols.append('BITSTREAM_HOSTNAME')
-    
-    return results_df[available_preview_cols].head(num_records).to_dict('records')
 
 def _create_impact_summary(results_df):
     """Create impact summary statistics"""

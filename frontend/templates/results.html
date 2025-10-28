@@ -384,6 +384,7 @@
                                     <th>BNG Hostname</th>
                                     <th>IGW Hostname</th>
                                     <th>IGW Interface</th>
+                                    <th>IGW Service</th>
                                     <th>Status</th>
                                     <th>Customer Count</th>
                                     <th>Voice-Customer Count</th>
@@ -403,8 +404,9 @@
                                     <td>{{ record.EDGE }}</td>
                                     <td>{{ record.distribution_hostname }}</td>
                                     <td>{{ record.BNG_HOSTNAME }}</td>
-                                    <td>{{ record.igw_hostname }}</td>
-                                    <td>{{ record.igw_interfaces }}</td>
+                                    <td>{{ record.IGW_HOSTNAME }}</td>
+                                    <td>{{ record.IGW_INTERFACES }}</td>
+                                    <td>{{ record.IGW_SEVICE }}</td>
                                     <td>{{ record.STATUS }}</td>
                                     <td>{{ record.CUST }}</td>
                                     <td>{{ record.TOTAL_VOICE_CUST }}</td>
@@ -416,7 +418,7 @@
                                     </td>
                                     <td>{{ record.Path }}</td>
                                     <td>{{ record.Path2 }}</td>
-                                    <td>{{ record.bngToIgw }}</td>
+                                    <td>{{ record.BNGTOIGW }}</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
