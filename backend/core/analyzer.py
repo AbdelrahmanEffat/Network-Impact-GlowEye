@@ -31,13 +31,15 @@ class UnifiedNetworkImpactAnalyzer:
         'bng_hostname': None
     }
     
-    def __init__(self, df_report, df_res_ospf, df_wan, df_agg, df_noms):
+    def __init__(self, df_report, df_res_ospf, df_wan, df_agg, df_noms, df_mobile):
         """Initialize with network data"""
         self.df_report = df_report.copy()
         self.df_res_ospf = df_res_ospf.copy()
         self.df_wan = df_wan.copy()
         self.df_agg = df_agg.copy()
         self.df_noms = df_noms.copy()
+        self.df_mobile = df_mobile.copy()
+        
         self.model = None
         self.final_df = None
         self.data_type = self._detect_data_type()
@@ -167,6 +169,42 @@ class UnifiedNetworkImpactAnalyzer:
         
         return results_df
     
+    def _process_mobile_data(self, dwn_identifier):
+        """Process mobile data and return count of CINUMs related to the down identifier"""
+        
+        if self.data_type == 'network':
+            # For network data, filter by hostname
+            mobile_data = self.df_mobile[self.df_mobile.hostname == dwn_identifier]
+        else:
+            # For bitstream data, filter by Exchange
+            mobile_data = self.df_mobile[self.df_mobile.Exchange == dwn_identifier]
+        
+        return mobile_data
+
+    def _process_mobile_data(self, dwn_identifier, identifier_type='auto'):
+        """Process mobile data and return mobile sites related to the down identifier"""
+        if identifier_type == 'auto':
+            identifier_type = self._detect_identifier_type(dwn_identifier)
+        
+        if identifier_type == 'exchange':
+            # For exchange failure, get all nodes in that exchange first
+            exchange_nodes = self._get_exchange_nodes(dwn_identifier)
+            print(f"Found {len(exchange_nodes)} nodes in exchange {dwn_identifier}")
+            
+            if len(exchange_nodes) == 0:
+                return pd.DataFrame()
+            
+            # Find mobile sites where hostname matches any node in the exchange
+            mobile_data = self.df_mobile[self.df_mobile['hostname'].isin(exchange_nodes)]
+            print(f"Found {len(mobile_data)} mobile sites in exchange {dwn_identifier}")
+            
+            return mobile_data
+        else:
+            # For node failure, filter by hostname
+            mobile_data = self.df_mobile[self.df_mobile['hostname'] == dwn_identifier]
+            print(f"Found {len(mobile_data)} mobile sites for node {dwn_identifier}")
+            return mobile_data
+
 
     def generate_base_results(self, dwn_identifier):
         """Generate base results with path calculations"""

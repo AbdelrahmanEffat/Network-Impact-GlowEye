@@ -65,6 +65,7 @@ analyzer_lock = threading.Lock()
 # download update
 latest_we_results = None
 latest_others_results = None
+latest_mobile_data = None 
 latest_identifier = None
 latest_identifier_type = None
 
@@ -92,6 +93,7 @@ async def startup_event():
                 df_wan = pd.read_csv(f'{data_path}\\wan.csv', low_memory=False)
                 df_agg = pd.read_csv(f'{data_path}\\agg.csv', low_memory=False)
                 df_noms = pd.read_csv(f'{data_path}\\NOMS.csv', low_memory=False)
+                df_mobile = pd.read_csv(f'{data_path}\\enodbs.csv', low_memory=False)
                 #print(df_report_we[df_report_we['MSANCODE']=='MSAN12345'])
             else:
                 # Load CSV files using the path from env
@@ -101,7 +103,8 @@ async def startup_event():
                 df_wan = pd.read_csv(f'{data_path}/wan.csv', low_memory=False)
                 df_agg = pd.read_csv(f'{data_path}/agg.csv', low_memory=False)
                 df_noms = pd.read_csv(f'{data_path}/NOMS.csv', low_memory=False)
-                
+                df_mobile = pd.read_csv(f'{data_path}/enodbs.csv', low_memory=False)
+
             ## maping columns names
             df_report_others.columns = df_report_others.columns.str.upper()
             df_report_we.columns = df_report_we.columns.str.upper()
@@ -114,8 +117,8 @@ async def startup_event():
                                         'EDGE_PORT':'edge_port'}, inplace=True)
             
             # Initialize analyzers for both data types
-            we_analyzer = UnifiedNetworkImpactAnalyzer(df_report_we, df_res_ospf, df_wan, df_agg, df_noms)
-            others_analyzer = UnifiedNetworkImpactAnalyzer(df_report_others, df_res_ospf, df_wan, df_agg, df_noms)
+            we_analyzer = UnifiedNetworkImpactAnalyzer(df_report_we, df_res_ospf, df_wan, df_agg, df_noms, df_mobile)
+            others_analyzer = UnifiedNetworkImpactAnalyzer(df_report_others, df_res_ospf, df_wan, df_agg, df_noms, df_mobile)
             
             # Preprocess data and generate base results
             logger.info("Preprocessing data and generating base results...")
@@ -127,7 +130,7 @@ async def startup_event():
             others_base_results = others_analyzer.generate_base_results("dummy_initialization")
             
             #logger.info(f"Data loaded successfully. WE shape: {df_report_we.shape}, Others shape: {df_report_others.shape}")
-            logger.info(f"Base results computed. WE: {we_base_results.shape}, Others: {others_base_results.shape}")
+            logger.info(f"Base results computed. WE: {we_base_results.shape}, Others: {others_base_results.shape}, Mobile: {df_mobile.shape}")
             
         except Exception as e:
             logger.error(f"Failed to load data: {str(e)}")
@@ -164,8 +167,8 @@ async def health_check():
 
 @app.post("/analyze/complete")
 async def analyze_network_impact_complete(request: AnalysisRequest):
-    """Single endpoint that returns both summary and detailed results - UPDATED TO STORE RESULTS"""
-    global latest_we_results, latest_others_results, latest_identifier, latest_identifier_type
+    """Single endpoint that returns both summary and detailed results - UPDATED WITH MOBILE DATA"""
+    global latest_we_results, latest_others_results, latest_identifier, latest_identifier_type, latest_mobile_data
     
     if we_analyzer is None or others_analyzer is None:
         raise HTTPException(status_code=503, detail="Service not ready")
@@ -194,6 +197,10 @@ async def analyze_network_impact_complete(request: AnalysisRequest):
             others_results = others_analyzer.analyze_node_impact(request.identifier)
             analysis_type = "Node"
         
+
+        # Combine mobile data and remove duplicates based on CINUM
+        mobile_data = we_analyzer._process_mobile_data(request.identifier)#.drop_duplicates(subset=['CINUM'])
+        
         execution_time = time.time() - start_time
         
         # FIX: Ensure Path2 column exists for both datasets
@@ -221,6 +228,7 @@ async def analyze_network_impact_complete(request: AnalysisRequest):
         # STORE THE COMPUTED RESULTS FOR DOWNLOAD
         latest_we_results = we_results.copy()
         latest_others_results = others_results.copy()
+        latest_mobile_data = mobile_data.copy()  # Store mobile data for download
         latest_identifier = request.identifier
         latest_identifier_type = request.identifier_type
         
@@ -240,6 +248,9 @@ async def analyze_network_impact_complete(request: AnalysisRequest):
         we_stats = _calculate_we_statistics(we_results)
         others_stats = _calculate_others_statistics(others_results)
         
+        # Add mobile data count to statistics
+        mobile_count = len(mobile_data)
+        
         # Ensure statistics are also serializable
         we_stats_serializable = ensure_serializable(we_stats)
         others_stats_serializable = ensure_serializable(others_stats)
@@ -250,6 +261,7 @@ async def analyze_network_impact_complete(request: AnalysisRequest):
             "summary": {
                 "total_records": we_impact_summary.get("total_records", 0) + others_impact_summary.get("total_records", 0),
                 "unique_msans": we_impact_summary.get("unique_msans", 0) + others_impact_summary.get("unique_msans", 0),
+                "mobile_cinum_count": mobile_count,  # Add mobile count to summary
                 "analysis_type": analysis_type,
                 "execution_time_seconds": round(execution_time, 3),
                 "impact_summary": {
@@ -275,14 +287,12 @@ async def analyze_network_impact_complete(request: AnalysisRequest):
         raise HTTPException(status_code=500, detail=f"Complete analysis failed: {str(e)}")
 
 
-
 @app.post("/analyze/csv")
 async def analyze_and_return_csv(request: AnalysisRequest):
     """
-    Analyze network impact and return results as a zip file containing both WE and Others CSVs
-    NOW USES PRE-COMPUTED RESULTS
+    Analyze network impact and return results as a zip file containing WE, Others, and Mobile CSVs
     """
-    global latest_we_results, latest_others_results, latest_identifier, latest_identifier_type
+    global latest_we_results, latest_others_results, latest_mobile_data, latest_identifier, latest_identifier_type
     
     if we_analyzer is None or others_analyzer is None:
         raise HTTPException(status_code=503, detail="Service not ready")
@@ -294,6 +304,7 @@ async def analyze_and_return_csv(request: AnalysisRequest):
         use_precomputed = (
             latest_we_results is not None and 
             latest_others_results is not None and
+            latest_mobile_data is not None and
             latest_identifier == request.identifier and
             latest_identifier_type == request.identifier_type
         )
@@ -302,6 +313,7 @@ async def analyze_and_return_csv(request: AnalysisRequest):
             logger.info("Using pre-computed results for CSV export")
             we_results = latest_we_results
             others_results = latest_others_results
+            mobile_data = latest_mobile_data
         else:
             logger.info("No pre-computed results found, running analysis...")
             # Use precomputed base results and only run impact analysis
@@ -315,6 +327,11 @@ async def analyze_and_return_csv(request: AnalysisRequest):
             else:
                 we_results = we_analyzer.analyze_node_impact(request.identifier)
                 others_results = others_analyzer.analyze_node_impact(request.identifier)
+            
+            # Process mobile data
+            we_mobile_data = we_analyzer._process_mobile_data(request.identifier)
+            others_mobile_data = others_analyzer._process_mobile_data(request.identifier)
+            mobile_data = pd.concat([we_mobile_data, others_mobile_data]).drop_duplicates(subset=['CINUM'])
             
             # Apply the same transformations as in complete analysis
             if not we_results.empty:
@@ -343,6 +360,10 @@ async def analyze_and_return_csv(request: AnalysisRequest):
             others_csv = others_results.to_csv(index=False)
             zip_file.writestr(f"others_impact_{request.identifier}.csv", others_csv)
             
+            # Add Mobile data - include ALL columns
+            mobile_csv = mobile_data.to_csv(index=False)
+            zip_file.writestr(f"mobile_impact_{request.identifier}.csv", mobile_csv)
+            
             # Add a metadata file with info about the export
             metadata = {
                 "identifier": request.identifier,
@@ -350,9 +371,11 @@ async def analyze_and_return_csv(request: AnalysisRequest):
                 "export_timestamp": pd.Timestamp.now().isoformat(),
                 "we_records_count": len(we_results),
                 "others_records_count": len(others_results),
+                "mobile_records_count": len(mobile_data),
                 "used_precomputed_results": use_precomputed,
                 "columns_in_we": list(we_results.columns) if not we_results.empty else [],
-                "columns_in_others": list(others_results.columns) if not others_results.empty else []
+                "columns_in_others": list(others_results.columns) if not others_results.empty else [],
+                "columns_in_mobile": list(mobile_data.columns) if not mobile_data.empty else []
             }
             zip_file.writestr("export_metadata.json", json.dumps(metadata, indent=2))
         
