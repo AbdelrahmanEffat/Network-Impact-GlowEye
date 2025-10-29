@@ -172,6 +172,12 @@ padding-bottom: 8px;
     font-weight: bold;
     fill: #ff0000 !important;
 }
+.network-info {
+  transform: scale(0.50);   /* makes it smaller */
+  transform-origin: top right;  /* keeps it aligned to top right */
+  width: 85%;                /* optional: control width */
+  font-size: 0.85em;         /* smaller text inside */
+}
 
 @keyframes pulse {
     0% { r: 12; }

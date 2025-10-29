@@ -1,4 +1,3 @@
-// Replace your entire NetworkDashboard class with this fixed version
 
 class NetworkDashboard {
     constructor() {
@@ -22,22 +21,18 @@ class NetworkDashboard {
             return false;
         }
 
-        // Instead of using MutationObserver, directly attach to tab buttons
-        // Set up tab handling
         this.setupTabHandling();
         
-        // If dashboard tab is already active, render immediately
         if (document.getElementById('dashboard-tab')?.classList.contains('active')) {
             setTimeout(() => this.renderDashboard(), 100);
         }
-        
+    
         return true;
     }
 
     setupTabHandling() {
         console.log('Setting up tab handling...');
         
-        // Find all tab buttons and add click handlers
         const tabButtons = document.querySelectorAll('.tab-button');
         tabButtons.forEach(button => {
             const clickHandler = () => {
@@ -196,11 +191,24 @@ class NetworkDashboard {
         header.textContent = `Network Path Visualization for ${msanCode}`;
         container.appendChild(header);
 
+        // Create a wrapper for visualization and info panel
+        const vizWrapper = document.createElement('div');
+        vizWrapper.style.display = 'flex';
+        vizWrapper.style.gap = '20px';
+        vizWrapper.style.alignItems = 'flex-start';
+
         const svgContainer = document.createElement('div');
         svgContainer.id = 'dashboard-network-viz';
         svgContainer.className = 'network-viz-svg';
         svgContainer.style.minHeight = '400px';
-        container.appendChild(svgContainer);
+        svgContainer.style.flex = '1';
+        
+        // Create info panel on the right
+        const infoPanel = this.createInfoPanel(data,msanCode);
+        
+        vizWrapper.appendChild(svgContainer);
+        vizWrapper.appendChild(infoPanel);
+        container.appendChild(vizWrapper);
 
         const { nodes, links } = this.processNetworkData(data);
         
@@ -272,7 +280,6 @@ class NetworkDashboard {
             .force('center', d3.forceCenter(width / 2, height / 2))
             .force('collision', d3.forceCollide().radius(25));
 
-        // Create links
         const link = svg.append('g')
             .attr('class', 'links')
             .selectAll('line')
@@ -282,7 +289,6 @@ class NetworkDashboard {
             .attr('stroke', d => d.type === 'primary' ? '#4CAF50' : '#FF9800')
             .attr('stroke-dasharray', d => d.type === 'backup' ? '5,5' : null);
 
-        // Create nodes with debugging
         const node = svg.append('g')
             .attr('class', 'nodes')
             .selectAll('circle')
@@ -305,7 +311,6 @@ class NetworkDashboard {
                 .on('drag', (event, d) => this.dragged(event, d))
                 .on('end', (event, d) => this.dragEnded(event, d)));
 
-        // Create labels
         const label = svg.append('g')
             .attr('class', 'labels')
             .selectAll('text')
@@ -345,7 +350,6 @@ class NetworkDashboard {
             return false;
         }
         
-        // Normalize strings for comparison
         const normalize = (str) => {
             return String(str).toLowerCase().trim().replace(/\s+/g, '');
         };
@@ -353,7 +357,6 @@ class NetworkDashboard {
         const normalizedNode = normalize(nodeId);
         const normalizedFailed = normalize(this.failedNodeId);
         
-        // Check for exact match or partial match (in case of hostname variations)
         const isFailed = normalizedNode === normalizedFailed || 
                         normalizedNode.includes(normalizedFailed) ||
                         normalizedFailed.includes(normalizedNode);
@@ -370,14 +373,12 @@ class NetworkDashboard {
             return false;
         }
         
-        // Normalize strings for comparison
         const normalize = (str) => {
             return String(str).toLowerCase().trim().replace(/\s+/g, '');
         };
         
         const normalizedNode = normalize(nodeId);
         
-        // Check each record to see if this node is the first in any primary path
         for (const record of this.weData) {
             const primaryPath = this.parsePath(record.Path);
             if (primaryPath.length > 0) {
@@ -396,7 +397,6 @@ class NetworkDashboard {
             .attr('class', 'legend')
             .attr('transform', 'translate(20, 20)');
 
-        // Primary path legend
         legend.append('line')
             .attr('x1', 0).attr('y1', 0)
             .attr('x2', 20).attr('y2', 0)
@@ -409,7 +409,6 @@ class NetworkDashboard {
             .attr('font-size', '12px')
             .attr('font-family', 'Arial, sans-serif');
 
-        // Backup path legend
         legend.append('line')
             .attr('x1', 0).attr('y1', 20)
             .attr('x2', 20).attr('y2', 20)
@@ -423,7 +422,6 @@ class NetworkDashboard {
             .attr('font-size', '12px')
             .attr('font-family', 'Arial, sans-serif');
 
-        // Edge node legend (NEW)
         legend.append('circle')
             .attr('cx', 10).attr('cy', 45)
             .attr('r', 6)
@@ -437,7 +435,6 @@ class NetworkDashboard {
             .attr('font-size', '12px')
             .attr('font-family', 'Arial, sans-serif');
 
-        // Failed node legend
         legend.append('circle')
             .attr('cx', 10).attr('cy', 65)
             .attr('r', 6)
@@ -451,7 +448,6 @@ class NetworkDashboard {
             .attr('font-size', '12px')
             .attr('font-family', 'Arial, sans-serif');
 
-        // Normal node legend
         legend.append('circle')
             .attr('cx', 10).attr('cy', 85)
             .attr('r', 6)
@@ -464,6 +460,139 @@ class NetworkDashboard {
             .attr('x', 25).attr('y', 90)
             .attr('font-size', '12px')
             .attr('font-family', 'Arial, sans-serif');
+    }
+createInfoPanel(data, msanCode) {
+    const panel = document.createElement('div');
+    panel.className = 'info-panel';
+    panel.style.minWidth = '140px'; // smaller width
+    panel.style.padding = '3px 4px'; // less padding
+    panel.style.backgroundColor = '#fafafa';
+    panel.style.borderRadius = '5px';
+    panel.style.border = '1px solid #ccc';
+    panel.style.fontSize = '10.5px'; // smaller font
+    panel.style.lineHeight = '1.2';
+
+    // Title
+    const title = document.createElement('h4');
+    title.textContent = 'Network Information';
+    title.style.margin = '0 0 4px 0'; // tighter margin
+    title.style.fontSize = '11px'; // smaller title
+    title.style.color = '#333';
+    title.style.borderBottom = '1px solid #bbb';
+    title.style.paddingBottom = '2px';
+    panel.appendChild(title);
+
+    // MSAN Display
+    const msanDiv = document.createElement('div');
+    msanDiv.style.marginBottom = '6px';
+    msanDiv.style.padding = '3px 6px';
+    msanDiv.style.backgroundColor = '#e8f0fe';
+    msanDiv.style.borderRadius = '3px';
+    msanDiv.style.borderLeft = '3px solid #2196F3';
+    msanDiv.style.fontSize = '10.5px';
+    msanDiv.innerHTML = `<strong style="color: #1976d2;">MSAN:</strong> ${msanCode}`;
+    panel.appendChild(msanDiv);
+
+    // Status groups
+    const upItems = new Set();
+    const stItems = new Set();
+
+    const filtered = data.filter(r => r.MSANCODE === msanCode);
+    filtered.forEach(record => {
+        const status = (record.STATUS || '').toLowerCase();
+        const entries = [];
+        if (record.BNG_HOSTNAME) entries.push(`BNG HOSTNAME: ${record.BNG_HOSTNAME}`);
+        if (record.IGW_HOSTNAME) entries.push(`IGW HOSTNAME: ${record.IGW_HOSTNAME}`);
+        if (record.IGW_INTERFACES) entries.push(`IGW INTERFACE : ${record.IGW_INTERFACES}`);
+        entries.forEach(item => {
+            if (status === 'up') upItems.add(item);
+            else if (status === 'st') stItems.add(item);
+        });
+    });
+
+    // Grid layout (smaller and tighter)
+    const grid = document.createElement('div');
+    grid.style.display = 'grid';
+    grid.style.gridTemplateColumns = '1fr 1fr';
+    grid.style.gap = '4px'; // smaller gap
+
+    const makeColumn = (titleText, color, items) => {
+        const col = document.createElement('div');
+        const header = document.createElement('div');
+        header.textContent = `${titleText} (${items.size})`;
+        header.style.color = color;
+        header.style.fontWeight = '600';
+        header.style.fontSize = '10.5px';
+        header.style.marginBottom = '2px';
+        col.appendChild(header);
+
+        if (items.size === 0) {
+            const empty = document.createElement('div');
+            empty.textContent = '—';
+            empty.style.color = '#aaa';
+            empty.style.fontSize = '10px';
+            col.appendChild(empty);
+        } else {
+            items.forEach(v => {
+                const div = document.createElement('div');
+                div.textContent = v;
+                div.style.padding = '2px 2px';
+                div.style.marginBottom = '2px';
+                div.style.backgroundColor = '#fff';
+                div.style.border = '1px solid #ddd';
+                div.style.borderRadius = '2px';
+                div.style.fontSize = '10px';
+                col.appendChild(div);
+            });
+        }
+        return col;
+    };
+
+    grid.appendChild(makeColumn('UP', '#2E7D32', upItems));
+    grid.appendChild(makeColumn('ST', '#C62828', stItems));
+
+    panel.appendChild(grid);
+    return panel;
+}
+
+
+    addInfoSection(container, title, values, color) {
+        const section = document.createElement('div');
+        section.style.marginBottom = '15px';
+
+        const sectionTitle = document.createElement('div');
+        sectionTitle.style.fontWeight = 'bold';
+        sectionTitle.style.marginBottom = '5px';
+        sectionTitle.style.color = color;
+        sectionTitle.style.fontSize = '13px';
+        sectionTitle.innerHTML = `<span style="display: inline-block; width: 8px; height: 8px; background-color: ${color}; border-radius: 50%; margin-right: 6px;"></span>${title}:`;
+        section.appendChild(sectionTitle);
+
+        if (values.length === 0) {
+            const noData = document.createElement('div');
+            noData.textContent = 'N/A';
+            noData.style.fontStyle = 'italic';
+            noData.style.color = '#999';
+            noData.style.fontSize = '12px';
+            noData.style.paddingLeft = '14px';
+            section.appendChild(noData);
+        } else {
+            values.forEach(value => {
+                const valueDiv = document.createElement('div');
+                valueDiv.textContent = value;
+                valueDiv.style.fontSize = '12px';
+                valueDiv.style.padding = '4px 8px';
+                valueDiv.style.marginLeft = '14px';
+                valueDiv.style.backgroundColor = '#fff';
+                valueDiv.style.borderRadius = '4px';
+                valueDiv.style.marginBottom = '4px';
+                valueDiv.style.border = '1px solid #e0e0e0';
+                valueDiv.style.wordBreak = 'break-word';
+                section.appendChild(valueDiv);
+            });
+        }
+
+        container.appendChild(section);
     }
 
     dragStarted(event, d) {
@@ -627,4 +756,5 @@ class NetworkDashboard {
         this.weData = null;
         this.failedNodeId = null;
     }
+    
 }
