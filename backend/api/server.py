@@ -97,13 +97,43 @@ async def startup_event():
                 #print(df_report_we[df_report_we['MSANCODE']=='MSAN12345'])
             else:
                 # Load CSV files using the path from env
-                df_report_we = pd.read_csv(f'{data_path}/we_igw.csv', low_memory=False)  # WE data
-                df_report_others = pd.read_csv(f'{data_path}/others.csv', low_memory=False)  # Others data
-                df_res_ospf = pd.read_csv(f'{data_path}/res_ospf.csv', low_memory=False)
-                df_wan = pd.read_csv(f'{data_path}/wan.csv', low_memory=False)
-                df_agg = pd.read_csv(f'{data_path}/agg.csv', low_memory=False)
-                df_noms = pd.read_csv(f'{data_path}/NOMS.csv', low_memory=False)
-                df_mobile = pd.read_csv(f'{data_path}/enodbs.csv', low_memory=False)
+                # df_report_we = pd.read_csv(f'{data_path}/we_igw.csv', low_memory=False)  # WE data
+                # df_report_others = pd.read_csv(f'{data_path}/others.csv', low_memory=False)  # Others data
+                # df_res_ospf = pd.read_csv(f'{data_path}/res_ospf.csv', low_memory=False)
+                # df_wan = pd.read_csv(f'{data_path}/wan.csv', low_memory=False)
+                # df_agg = pd.read_csv(f'{data_path}/agg.csv', low_memory=False)
+                # df_noms = pd.read_csv(f'{data_path}/NOMS.csv', low_memory=False)
+                # df_mobile = pd.read_csv(f'{data_path}/enodbs.csv', low_memory=False)
+                logger.info("Loading data from Redis cache with date-based keys...")
+
+                # Check Redis connection
+                if not redis_manager.health_check():
+                    raise Exception("Redis connection failed")
+                
+                # Load data from Redis using date-based keys
+                df_report_we = redis_manager.get_dataframe("we")
+                df_report_others = redis_manager.get_dataframe("others")
+                df_res_ospf = redis_manager.get_dataframe("res_ospf")
+                df_wan = redis_manager.get_dataframe("wanData")
+                df_agg = redis_manager.get_dataframe("agg")
+                df_noms = redis_manager.get_dataframe('NOMS')
+                df_mobile = redis_manager.get_dataframe('enodbs')
+                
+                # Log which keys we're using
+                logger.info(f"Using Redis keys: we={redis_manager.get_latest_key('we')}, "
+                        f"others={redis_manager.get_latest_key('others')}")
+                
+                # Validate that all data was loaded
+                if any(df is None for df in [df_report_we, df_report_others, df_res_ospf, df_wan, df_agg]):
+                    missing = []
+                    if df_report_we is None: missing.append("we")
+                    if df_report_others is None: missing.append("others")
+                    if df_res_ospf is None: missing.append("res_ospf")
+                    if df_wan is None: missing.append("wan")
+                    if df_agg is None: missing.append("agg")
+                    if df_noms is None: missing.append("NOMS")
+                    if df_mobile is None: missing.append("enodbs")
+                    raise Exception(f"Failed to load data from Redis for keys: {missing}")
 
             ## maping columns names
             df_report_others.columns = df_report_others.columns.str.upper()
