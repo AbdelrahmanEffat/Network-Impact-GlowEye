@@ -31,7 +31,7 @@ class UnifiedNetworkImpactAnalyzer:
         'bng_hostname': None
     }
     
-    def __init__(self, df_report, df_res_ospf, df_wan, df_agg, df_noms, df_mobile):
+    def __init__(self, df_report, df_res_ospf, df_wan, df_agg, df_noms, df_mobile, df_sbc):
         """Initialize with network data"""
         self.df_report = df_report.copy()
         self.df_res_ospf = df_res_ospf.copy()
@@ -39,6 +39,7 @@ class UnifiedNetworkImpactAnalyzer:
         self.df_agg = df_agg.copy()
         self.df_noms = df_noms.copy()
         self.df_mobile = df_mobile.copy()
+        self.df_sbc = df_sbc.copy()
         
         self.model = None
         self.final_df = None
@@ -169,17 +170,6 @@ class UnifiedNetworkImpactAnalyzer:
         
         return results_df
     
-    def _process_mobile_data(self, dwn_identifier):
-        """Process mobile data and return count of CINUMs related to the down identifier"""
-        
-        if self.data_type == 'network':
-            # For network data, filter by hostname
-            mobile_data = self.df_mobile[self.df_mobile.hostname == dwn_identifier]
-        else:
-            # For bitstream data, filter by Exchange
-            mobile_data = self.df_mobile[self.df_mobile.Exchange == dwn_identifier]
-        
-        return mobile_data
 
     def _process_mobile_data(self, dwn_identifier, identifier_type='auto'):
         """Process mobile data and return mobile sites related to the down identifier"""
@@ -204,6 +194,37 @@ class UnifiedNetworkImpactAnalyzer:
             mobile_data = self.df_mobile[self.df_mobile['hostname'] == dwn_identifier]
             print(f"Found {len(mobile_data)} mobile sites for node {dwn_identifier}")
             return mobile_data
+
+
+    def _process_sbc_data(self, dwn_identifier, identifier_type='auto'):
+        """Process sbc data and return affected customers count related to the down identifier"""
+        if identifier_type == 'auto':
+            identifier_type = self._detect_identifier_type(dwn_identifier)
+        
+        if identifier_type == 'exchange':
+            # For exchange failure, get all nodes in that exchange first
+            
+            sbc = self.df_sbc[self.df_sbc.exchange == dwn_identifier]['sbc'].unique()
+            if len(sbc) == 0:
+                return 0
+            
+            sbc = sbc[0]
+            #print(self.df_report.columns)
+            cust_count = int(self.df_report[self.df_report.SBC == sbc].drop_duplicates(subset='MSANCODE')['CUST'].sum())
+            
+            return cust_count
+        else:
+            # For node failure, filter by hostname
+            sbc = self.df_sbc[self.df_sbc.exchange == dwn_identifier]['sbc'].unique()
+            
+            if len(sbc) == 0 or len(self.df_sbc[self.df_sbc.sbc.isin(sbc)]['nodename'].unique()) > 1:
+                return 0
+            
+            
+            sbc = sbc[0]
+            cust_count = int(self.df_report[self.df_report.SBC == sbc].drop_duplicates(subset='MSANCODE')['CUST'].sum())
+
+            return cust_count
 
 
     def generate_base_results(self, dwn_identifier):

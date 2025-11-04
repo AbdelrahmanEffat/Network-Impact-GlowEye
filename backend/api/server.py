@@ -87,13 +87,14 @@ async def startup_event():
             logger.info(f"Loading CSV files from: {data_path}")
 
             if value=='false':
-                df_report_we = pd.read_csv(f'{data_path}\\we_igw.csv', low_memory=False)  # WE data
+                df_report_we = pd.read_csv(f'{data_path}\\we.csv', low_memory=False)  # WE data
                 df_report_others = pd.read_csv(f'{data_path}\\others.csv', low_memory=False)  # Others data
                 df_res_ospf = pd.read_csv(f'{data_path}\\res_ospf.csv', low_memory=False)
                 df_wan = pd.read_csv(f'{data_path}\\wan.csv', low_memory=False)
                 df_agg = pd.read_csv(f'{data_path}\\agg.csv', low_memory=False)
                 df_noms = pd.read_csv(f'{data_path}\\NOMS.csv', low_memory=False)
                 df_mobile = pd.read_csv(f'{data_path}\\enodbs.csv', low_memory=False)
+                df_sbc = pd.read_csv(f'{data_path}\\sbc.csv', low_memory=False)
                 #print(df_report_we[df_report_we['MSANCODE']=='MSAN12345'])
             else:
                 # Load CSV files using the path from env
@@ -118,6 +119,7 @@ async def startup_event():
                 df_agg = redis_manager.get_dataframe("agg")
                 df_noms = redis_manager.get_dataframe('NOMS')
                 df_mobile = redis_manager.get_dataframe('enodbs')
+                df_sbc = redis_manager.get_dataframe('sbc')
                 
                 # Log which keys we're using
                 logger.info(f"Using Redis keys: we={redis_manager.get_latest_key('we')}, "
@@ -133,6 +135,7 @@ async def startup_event():
                     if df_agg is None: missing.append("agg")
                     if df_noms is None: missing.append("NOMS")
                     if df_mobile is None: missing.append("enodbs")
+                    if df_sbc is None: missing.append("sbc")
                     raise Exception(f"Failed to load data from Redis for keys: {missing}")
 
             ## maping columns names
@@ -147,8 +150,8 @@ async def startup_event():
                                         'EDGE_PORT':'edge_port'}, inplace=True)
             
             # Initialize analyzers for both data types
-            we_analyzer = UnifiedNetworkImpactAnalyzer(df_report_we, df_res_ospf, df_wan, df_agg, df_noms, df_mobile)
-            others_analyzer = UnifiedNetworkImpactAnalyzer(df_report_others, df_res_ospf, df_wan, df_agg, df_noms, df_mobile)
+            we_analyzer = UnifiedNetworkImpactAnalyzer(df_report_we, df_res_ospf, df_wan, df_agg, df_noms, df_mobile, df_sbc)
+            others_analyzer = UnifiedNetworkImpactAnalyzer(df_report_others, df_res_ospf, df_wan, df_agg, df_noms, df_mobile, df_sbc)
             
             # Preprocess data and generate base results
             logger.info("Preprocessing data and generating base results...")
@@ -230,6 +233,8 @@ async def analyze_network_impact_complete(request: AnalysisRequest):
 
         # Combine mobile data and remove duplicates based on CINUM
         mobile_data = we_analyzer._process_mobile_data(request.identifier)#.drop_duplicates(subset=['CINUM'])
+
+        sbc_count = we_analyzer._process_sbc_data(request.identifier)
         
         execution_time = time.time() - start_time
         
@@ -293,6 +298,7 @@ async def analyze_network_impact_complete(request: AnalysisRequest):
                 "unique_msans": we_impact_summary.get("unique_msans", 0) + others_impact_summary.get("unique_msans", 0),
                 "mobile_cinum_count": mobile_count,  # Add mobile count to summary
                 "analysis_type": analysis_type,
+                "sbc_affected_count": sbc_count,
                 "execution_time_seconds": round(execution_time, 3),
                 "impact_summary": {
                     "we": ensure_serializable(we_impact_summary),
